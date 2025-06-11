@@ -1,4 +1,4 @@
 
 
-from . client import Client
-from .utils import Packet
+from .client import Client
+from . import utils
