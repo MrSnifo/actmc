@@ -6,11 +6,14 @@ from .utils import Packet
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from asyncio import StreamReader, StreamWriter
-    from typing import Tuple, Optional, ClassVar
+    from typing import Tuple, Optional, ClassVar, Callable, Any
+
 
 import logging
 
 _logger = logging.getLogger(__name__)
+
+
 
 class ClientSocket:
     """
@@ -34,11 +37,12 @@ class ClientSocket:
     DEFAULT_LIMIT: ClassVar[int] = 65536
     PROTOCOL: ClassVar[int] = 340
 
-    __slots__ = ('host', 'port', 'username')
+    __slots__ = ('host', 'port', 'username', 'send_packet')
 
     def __init__(self, host: str, port: Optional[int]) -> None:
         self.host = host
         self.port = port
+        self.send_packet: Optional[Callable[..., Any]] = None
 
     async def connect(self) -> Tuple[StreamReader, StreamWriter]:
         return await asyncio.open_connection(host=self.host, port=self.port, limit=self.DEFAULT_LIMIT)
@@ -71,3 +75,6 @@ class ClientSocket:
         """
         return (Packet.write_varint(self.PROTOCOL) + Packet.string(self.host) + Packet.short(self.port)
                 + Packet.write_varint(2))
+
+
+
