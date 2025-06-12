@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from . import utils
+from actmc import protocol
 import asyncio
 
 if TYPE_CHECKING:
@@ -55,16 +55,19 @@ class TcpClient:
         _logger.info(f"Connection established to {self.host}:{self.port}")
         return reader, writer
     @property
-    def build_handshake_packet(self, next_state: int = 2) -> bytes:
+    def build_handshake_packet(self, next_state: int = 2) -> protocol.ProtocolBuffer:
         """Construct the Minecraft handshake packet."""
-        return (
-            utils.write_varint(self.PROTOCOL) +
-            utils.string(self.host) +
-            utils.short(self.port) +
-            utils.write_varint(next_state)
-        )
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(self.PROTOCOL))
+        buffer.write(protocol.pack_string(self.host))
+        buffer.write(protocol.pack_short(self.port))
+        buffer.write(protocol.write_varint(next_state))
+
+        return buffer
 
     @staticmethod
-    def build_login_packet(username: str) -> bytes:
+    def build_login_packet(username: str) -> protocol.ProtocolBuffer:
         """Construct the login start packet with the given username."""
-        return utils.string(username)
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_string(username))
+        return buffer

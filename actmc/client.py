@@ -33,12 +33,16 @@ class Client:
     async def connect(self) -> None:
 
 
-        while not self.is_closed():
-            socket = MinecraftSocket.initialize_socket(client=self, state=self._connection)
-            self.socket = await asyncio.wait_for(socket, timeout=60.0)
-            await self._connection.send_initial_packets()
-            while True:
-                await self.socket.poll()
+        try:
+            while not self.is_closed():
+                socket = MinecraftSocket.initialize_socket(client=self, state=self._connection)
+                self.socket = await asyncio.wait_for(socket, timeout=60.0)
+                await self._connection.send_initial_packets()
+                while True:
+                    await self.socket.poll()
+
+        except asyncio.exceptions.IncompleteReadError:
+            print("ERROR - Something went wrong")
 
 
     async def auth(self, username: str):
