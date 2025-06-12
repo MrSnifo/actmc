@@ -3,7 +3,6 @@ import json
 import uuid
 import zlib
 import io
-from . import utils
 from typing import Dict, Union, Any, Optional, Tuple
 from .errors import DataTooShortError, InvalidDataError
 

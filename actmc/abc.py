@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .world import BlockState
-    from io import BytesIO
+    from .protocol import ProtocolBuffer
 
 
 class Palette(ABC):
@@ -27,11 +27,11 @@ class Palette(ABC):
         pass
 
     @abstractmethod
-    def read(self, buffer: BytesIO) -> None:
+    def read(self, buffer: ProtocolBuffer) -> None:
         """Read palette data from buffer."""
         pass
 
     @abstractmethod
-    def write(self, buffer: BytesIO) -> None:
+    def write(self, buffer: ProtocolBuffer) -> None:
         """Write palette data to buffer."""
         pass

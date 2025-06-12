@@ -69,11 +69,11 @@ class IndirectPalette(Palette):
             self.state_to_id[state] = palette_id
 
     def write(self, buffer: ProtocolBuffer) -> None:
-        write_varint(buffer, len(self.id_to_state))
+        write_varint(len(self.id_to_state))
         for palette_id in range(len(self.id_to_state)):
             state = self.id_to_state[palette_id]
             state_id = self._get_global_palette_id_from_state(state)
-            write_varint(buffer, state_id)
+            write_varint(state_id)
 
     @staticmethod
     def _get_global_palette_id_from_state(state: BlockState) -> int:
