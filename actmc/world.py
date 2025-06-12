@@ -112,8 +112,8 @@ class DirectPalette(Palette):
         assert dummy_length == 0, f"Expected dummy palette length of 0, got {dummy_length}"
 
     def write(self, buffer: ProtocolBuffer) -> None:
-        # Write dummy palette length of 0
-        write_varint(buffer, 0)
+        # Ignore
+        write_varint(0)
 
     @staticmethod
     def _get_global_palette_id_from_state(state: BlockState) -> int:
@@ -370,7 +370,7 @@ class ChunkDataCodec:
                     if start_long != end_long:
                         data_array[end_long] = (value >> (64 - start_offset))
 
-        write_varint(buffer, data_length)
+        write_varint(data_length)
         for long_value in data_array:
             buffer.write(struct.pack('>Q', long_value))
 
