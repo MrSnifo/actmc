@@ -73,6 +73,7 @@ class MinecraftSocket:
         # Send packet bytes over writer
         self.writer.write(packet_bytes)
         await self.writer.drain()
+        _logger.debug(f"Sent packet ID 0x{packet_id:02X} with size {len(packet_bytes)} bytes")
 
     def _parse_packet(self, data: bytes) -> tuple[int, protocol.ProtocolBuffer]:
         buffer = protocol.ProtocolBuffer(data)
@@ -117,10 +118,11 @@ class MinecraftSocket:
             await self.send_packet(0x0B, protocol.pack_long(value))
             return
 
-        if packet_id in [0x02, 0x23, 0x1a, 0x41, 0x40, 0x3a, 0x20, 0x1d]:
+        if packet_id in [0x02, 0x23, 0x1a, 0x41, 0x40, 0x3a, 0x20, 0x2f]:
             self._state.parse(packet_id, packet_data)
 
         return
+
 
 
 

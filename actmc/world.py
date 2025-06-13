@@ -423,10 +423,11 @@ class World:
         """Get a chunk if loaded, otherwise None."""
         return self.chunks.get((chunk_x, chunk_z))
 
-    def load_chunk(self, data: bytes) -> None:
+    def load_chunk(self, data: bytes) -> Chunk:
         """Load a chunk into the world."""
         chunk = ChunkDataCodec.read_chunk_data_packet(data)
         self.chunks[(chunk.x, chunk.z)] = chunk
+        return self.chunks[(chunk.x, chunk.z)]
 
     def unload_chunk(self, chunk_x: int, chunk_z: int) -> None:
         """Unload a chunk from the world."""

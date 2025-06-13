@@ -48,11 +48,11 @@ class TcpClient:
 
     async def connect(self) -> Tuple[StreamReader, StreamWriter]:
         """Establish an asynchronous TCP connection to the specified host and port."""
-        _logger.info(f"Connecting to {self.host}:{self.port}...")
+        _logger.debug(f"Connecting to {self.host}:{self.port}...")
         reader, writer = await asyncio.open_connection(
             host=self.host, port=self.port, limit=self.DEFAULT_LIMIT
         )
-        _logger.info(f"Connection established to {self.host}:{self.port}")
+        _logger.debug(f"Connection established to {self.host}:{self.port}")
         return reader, writer
     @property
     def build_handshake_packet(self, next_state: int = 2) -> protocol.ProtocolBuffer:
@@ -70,4 +70,33 @@ class TcpClient:
         """Construct the login start packet with the given username."""
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.pack_string(username))
+        return buffer
+
+    @staticmethod
+    def build_player_look_packet(yaw: float, pitch: float, on_ground: bool) -> protocol.ProtocolBuffer:
+        """Constructs the Player Look packet (0x0F, serverbound)."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(0x0f))
+        buffer.write(protocol.pack_float(yaw))
+        buffer.write(protocol.pack_float(pitch))
+        buffer.write(protocol.pack_bool(on_ground))
+        return buffer
+
+    @staticmethod
+    def build_player_position_and_look_packet(
+        x: float,
+        feet_y: float,
+        z: float,
+        yaw: float,
+        pitch: float,
+        on_ground: bool
+    ) -> protocol.ProtocolBuffer:
+        """Constructs the Player Position and Look packet (0x0E, serverbound)."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_double(x))            # X position
+        buffer.write(protocol.pack_double(feet_y))       # Feet Y position
+        buffer.write(protocol.pack_double(z))            # Z position
+        buffer.write(protocol.pack_float(yaw))           # Yaw
+        buffer.write(protocol.pack_float(pitch))         # Pitch
+        buffer.write(protocol.pack_bool(on_ground))      # On Ground
         return buffer
