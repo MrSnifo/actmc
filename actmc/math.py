@@ -1,4 +1,5 @@
 import math
+from typing import Tuple
 
 class Vector3D:
     """Represents a 3D vector with X, Y, Z components."""
@@ -35,6 +36,11 @@ class Vector3D:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def as_int_tuple(self) -> Tuple[int, int, int]:
+        return int(self.x), int(self.y), int(self.z)
+
+    def as_float_tuple(self) -> Tuple[float, float, float]:
+        return float(self.x), float(self.y), float(self.z)
 
 class Rotation:
     """Represents rotation with pitch and yaw angles."""

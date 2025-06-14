@@ -1,6 +1,6 @@
 from typing import Optional
 
-from .entity import Player, ObjectData
+from .entity import Player, ObjectData, Entity
 from .tcp import TcpClient
 from .world import World, BlockState
 from typing import TYPE_CHECKING, Callable, Any
@@ -183,7 +183,7 @@ class ConnectionState:
         """
         entity_id = protocol.read_varint(data)
         x, y, z = protocol.read_position(data)
-        self._dispatch('player_use_bed', entity_id, math.Vector3D(x, y, z))
+        self._dispatch('player_use_bed', Entity(entity_id, entity_type='player'), math.Vector3D(x, y, z))
 
     def parse_0x00(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -219,13 +219,52 @@ class ConnectionState:
         """
         position = protocol.read_position(data)
         block_state_id = protocol.read_varint(data)
+        vector = math.Vector3D(*position)
 
-        x, y, z = position
         block_type = block_state_id >> 4
         block_meta = block_state_id & 0xF
 
         state =  BlockState(block_type, block_meta)
-        self._dispatch('block_change', state, math.Vector3D(x, y, z))
-        self.world.set_state(x, y, z, state)
+
+
+        self._dispatch('block_change', state, vector)
+        self.world.set_state(vector, state)
+
+    def parse_0x10(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Multi Block Change (Packet ID: 0x10)
+
+        Fired whenever 2 or more blocks are changed within the same chunk on the same tick.
+        Dispatches a single 'multi_block_change' event with a list of (BlockState, Vector3D).
+        """
+        chunk_x = protocol.read_int(data)
+        chunk_z = protocol.read_int(data)
+        record_count = protocol.read_varint(data)
+
+        changes = []
+
+        for _ in range(record_count):
+            horizontal = protocol.read_ubyte(data)
+            y = protocol.read_ubyte(data)
+            block_state_id = protocol.read_varint(data)
+
+            # Extract relative coordinates in the chunk (0-15)
+            rel_x = (horizontal >> 4) & 0x0F
+            rel_z = horizontal & 0x0F
+
+            # Absolute coordinates
+            x = (chunk_x * 16) + rel_x
+            z = (chunk_z * 16) + rel_z
+
+            block_type = block_state_id >> 4
+            block_meta = block_state_id & 0xF
+            state = BlockState(block_type, block_meta)
+            vector = math.Vector3D(int(x), int(y), int(z))
+            changes.append((state, vector))
+            self.world.set_state(vector, state)
+
+        # Dispatch once with all changes
+        self._dispatch('multi_block_change', changes)
+
 
 

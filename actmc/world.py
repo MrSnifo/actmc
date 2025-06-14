@@ -460,12 +460,13 @@ class World:
         section_y, rel_y = self._block_to_section_coord(y)
         return chunk, section_y, rel_x, rel_y, rel_z
 
-    def set_state(self, x: int, y: int, z: int, state: BlockState) -> bool:
+    def set_state(self, position: Vector3D, state: BlockState) -> bool:
         """
         Set block state at world coordinates (x, y, z).
         Returns True if successful, False if chunk not loaded or invalid position.
         """
-        result = self._get_position_components(x, y, z)
+
+        result = self._get_position_components(*position.as_int_tuple())
         if result is None:
             return False
 
@@ -485,7 +486,7 @@ class World:
         Get block state at world coordinates (x, y, z).
         Returns BlockState if chunk loaded and position valid, None otherwise.
         """
-        result = self._get_position_components(int(position.x), int(position.y), int(position.z))
+        result = self._get_position_components(*position.as_int_tuple())
         if result is None:
             return None
 
