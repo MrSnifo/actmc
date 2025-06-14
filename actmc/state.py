@@ -37,7 +37,7 @@ class ConnectionState:
         socket = self._get_socket()
         if not socket:
             raise RuntimeError("Socket is not initialized or not connected.")
-        await socket.send_packet(packet_id, buffer.getvalue())
+        await socket.write_packet(packet_id, buffer.getvalue())
 
     async def send_player_position_and_look(self, x: float, y: float, z: float, yaw: float, pitch: float,
                                             on_ground: bool):
@@ -55,8 +55,9 @@ class ConnectionState:
             func = getattr(self, f'parse_0x{packet_id:02X}'.lower())
             func(data)
         except Exception as error:
+            # todo: change
             _logger.debug(f'parse_0x{packet_id:02X}'.lower())
-            _logger.debug('Failed to parse event: %s', error)
+            _logger.exception('Failed to parse event: %s', error)
 
     def parse_0x02(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -138,12 +139,11 @@ class ConnectionState:
         ground_up_continuous = protocol.read_bool(data)
         primary_bitmask = protocol.read_varint(data)
         chunk_data_size = protocol.read_varint(data)
-
         _logger.trace(  # type: ignore
             f"Parsing chunk ({chunk_x}, {chunk_z}), ground_up: {ground_up_continuous}, "
             f"bitmask: {bin(primary_bitmask)}, data_size: {chunk_data_size}")
+
         self.world.load_chunk(data.getvalue())
-        self._dispatch('load_chunk', data.getvalue())
 
     def parse_0x2f(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -170,9 +170,51 @@ class ConnectionState:
         if flags & 0x10:  # Pitch relative
             pitch += self.player.rotation.pitch_angle
 
-
         self.player.position = math.Vector3D(x, y, z)
         self.player.rotation = math.Rotation(pitch, yaw)
 
         self._dispatch('update_player_position_look', self.player.position, self.player.rotation, teleport_id)
+
+    def parse_0x30(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Use Bed (Packet ID: 0x30)
+
+        Sent when a player goes into bed. Notifies nearby players.
+        """
+        entity_id = protocol.read_varint(data)
+        x, y, z = protocol.read_position(data)
+        self._dispatch('player_use_bed', entity_id, math.Vector3D(x, y, z))
+
+    def parse_0x00(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Spawn Object (Packet ID: 0x00)
+
+        Sent when the server spawns an object such as a vehicle, item frame, projectile, etc.
+        """
+        entity_id = protocol.read_varint(data)
+        object_uuid = protocol.read_uuid(data)
+        object_type = protocol.read_byte(data)
+
+        x = protocol.read_double(data)
+        y = protocol.read_double(data)
+        z = protocol.read_double(data)
+
+        pitch = protocol.read_byte(data)  # Angle is a byte
+        yaw = protocol.read_byte(data)  # Angle is a byte
+
+        object_data = protocol.read_int(data)
+
+        velocity_x = protocol.read_short(data)
+        velocity_y = protocol.read_short(data)
+        velocity_z = protocol.read_short(data)
+        print("works")
+        self._dispatch('spawn_object', {
+            'entity_id': entity_id,
+            'uuid': object_uuid,
+            'type': object_type,
+            'position': (x, y, z),
+            'rotation': {'pitch': pitch, 'yaw': yaw},
+            'data': object_data,
+            'velocity': (velocity_x, velocity_y, velocity_z)
+        })
 

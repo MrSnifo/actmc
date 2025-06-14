@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .gateway import MinecraftSocket
-from typing import Optional, Literal, Any, Self, Callable
+from typing import Optional, Literal, Any, Callable
 import asyncio
 from .utils import setup_logging
 from .tcp import TcpClient
@@ -51,6 +51,7 @@ class Client:
             while not self.is_closed():
                 socket = MinecraftSocket.initialize_socket(client=self, state=self._connection)
                 self.socket = await asyncio.wait_for(socket, timeout=60.0)
+                self.dispatch('connect')
                 await self._connection.send_initial_packets()
                 while True:
                     await self.socket.poll()
@@ -94,7 +95,7 @@ class Client:
         try:
             coro = getattr(self, method)
             if coro is not None and asyncio.iscoroutinefunction(coro):
-                _logger.trace('Dispatching event %s', event) # type: ignore
+                _logger.debug('Dispatching event %s', event)
                 wrapped = self._run_event(coro, method, *args, **kwargs)
                 # Schedule the task
                 self.loop.create_task(wrapped, name=f'twitch:{method}')

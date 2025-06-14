@@ -417,7 +417,12 @@ class World:
     SECTIONS_PER_CHUNK = WORLD_HEIGHT // SECTION_HEIGHT
 
     def __init__(self):
-        self.chunks = {}  # Dict[Tuple[int, int], Chunk]
+        self.chunks: Dict[Tuple[int, int], Chunk] = {}
+        self.chunks_data: Dict[Tuple[int, int], bytes] = {}
+
+    def get_chunk_data(self, chunk_x: int, chunk_z: int) -> Optional[bytes]:
+        """Get a chunk bytes if loaded, otherwise None."""
+        return self.chunks_data.get((chunk_x, chunk_z))
 
     def get_chunk(self, chunk_x: int, chunk_z: int) -> Optional[Chunk]:
         """Get a chunk if loaded, otherwise None."""
@@ -426,12 +431,17 @@ class World:
     def load_chunk(self, data: bytes) -> Chunk:
         """Load a chunk into the world."""
         chunk = ChunkDataCodec.read_chunk_data_packet(data)
+        self.chunks_data[(chunk.x, chunk.z)] = data
         self.chunks[(chunk.x, chunk.z)] = chunk
         return self.chunks[(chunk.x, chunk.z)]
 
     def unload_chunk(self, chunk_x: int, chunk_z: int) -> None:
         """Unload a chunk from the world."""
         self.chunks.pop((chunk_x, chunk_z), None)
+        self.chunks_data.pop((chunk_x, chunk_z), None)
+
+
+
 
     def _get_position_components(self, x: int, y: int, z: int) -> Optional[Tuple[Chunk, int, int, int, int]]:
         """Get chunk and relative coordinates for a world position."""

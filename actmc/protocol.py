@@ -264,109 +264,6 @@ def read_uuid(buffer: ProtocolBuffer) -> str:
     return str(uuid.UUID(bytes=uuid_bytes))
 
 
-# Compression utilities
-class PacketCompressor:
-    """Handles packet compression/decompression with proper protocol format"""
-
-    def __init__(self, compression_threshold: int = 256):
-        self.compression_threshold = compression_threshold
-
-    def compress_packet(self, packet_id: int, packet_data: bytes) -> bytes:
-        """
-        Compress packet according to Minecraft protocol format:
-        - If compressed: [packet_length][data_length][compressed_data]
-        - If not compressed: [packet_length][data_length=0][packet_id][packet_data]
-        """
-        # Create uncompressed packet content
-        uncompressed_buffer = ProtocolBuffer()
-        uncompressed_buffer.write(write_varint(packet_id))
-        uncompressed_buffer.write(packet_data)
-        uncompressed_data = uncompressed_buffer.getvalue()
-
-        # Check if we should compress
-        if len(uncompressed_data) >= self.compression_threshold:
-            # Compress the data
-            try:
-                compressed_data = zlib.compress(uncompressed_data, level=zlib.Z_BEST_SPEED)
-            except zlib.error as e:
-                raise InvalidDataError(f"Failed to compress packet: {e}")
-
-            # Build compressed packet
-            result_buffer = ProtocolBuffer()
-            result_buffer.write(write_varint(len(uncompressed_data)))  # Data length (uncompressed size)
-            result_buffer.write(compressed_data)
-
-            # Prepend total packet length
-            packet_content = result_buffer.getvalue()
-            return write_varint(len(packet_content)) + packet_content
-        else:
-            # Not compressed - data length is 0
-            result_buffer = ProtocolBuffer()
-            result_buffer.write(write_varint(0))  # Data length = 0 (not compressed)
-            result_buffer.write(uncompressed_data)
-
-            # Prepend total packet length
-            packet_content = result_buffer.getvalue()
-            return write_varint(len(packet_content)) + packet_content
-
-    @staticmethod
-    def decompress_packet(data: bytes) -> Tuple[int, bytes]:
-        """
-        Decompress packet data and return (packet_id, packet_data)
-        """
-        if not data:
-            raise InvalidDataError("Empty packet data")
-
-        buffer = ProtocolBuffer(data)
-
-        # Read packet length (we don't actually need this for decompression)
-        try:
-            packet_length = read_varint(buffer)
-        except (DataTooShortError, InvalidDataError):
-            raise InvalidDataError("Invalid packet length")
-
-        # Verify we have enough data
-        if buffer.remaining() != packet_length:
-            raise InvalidDataError(f"Packet length mismatch: expected {packet_length}, got {buffer.remaining()}")
-
-        # Read data length
-        try:
-            data_length = read_varint(buffer)
-        except (DataTooShortError, InvalidDataError):
-            raise InvalidDataError("Invalid data length")
-
-        if data_length == 0:
-            # Not compressed - read packet ID and data directly
-            try:
-                packet_id = read_varint(buffer)
-                packet_data = buffer.read(buffer.remaining())
-                return packet_id, packet_data
-            except DataTooShortError:
-                raise InvalidDataError("Incomplete uncompressed packet")
-        else:
-            # Compressed - decompress first
-            compressed_data = buffer.read(buffer.remaining())
-            if not compressed_data:
-                raise InvalidDataError("No compressed data found")
-
-            try:
-                decompressed = zlib.decompress(compressed_data)
-            except zlib.error as e:
-                raise InvalidDataError(f"Failed to decompress packet: {e}")
-
-            # Verify decompressed size
-            if len(decompressed) != data_length:
-                raise InvalidDataError(f"Decompressed size mismatch: expected {data_length}, got {len(decompressed)}")
-
-            # Parse decompressed data
-            decompressed_buffer = ProtocolBuffer(decompressed)
-            try:
-                packet_id = read_varint(decompressed_buffer)
-                packet_data = decompressed_buffer.read(decompressed_buffer.remaining())
-                return packet_id, packet_data
-            except DataTooShortError:
-                raise InvalidDataError("Incomplete decompressed packet")
-
 # Utility functions
 def peek_varint(buffer: ProtocolBuffer) -> int:
     """Peek at VarInt without advancing buffer position"""
@@ -395,3 +292,39 @@ def pack_byte_array(data: bytes, include_length: bool = True) -> bytes:
     if include_length:
         return write_varint(len(data)) + data
     return data
+
+
+def read_position(buffer: ProtocolBuffer) -> Tuple[int, int, int]:
+    """
+    Read a 64-bit position value from buffer and decode into x, y, z coordinates.
+
+    Position format:
+    - x: 26 MSBs (most significant bits)
+    - y: 12 bits in the middle
+    - z: 26 LSBs (least significant bits)
+
+    Returns:
+        Tuple[int, int, int]: (x, y, z) coordinates with proper sign handling
+    """
+    # Read the 64-bit unsigned value from buffer
+    val = read_ulong(buffer)
+
+    # Extract the three components using bit operations
+    x = val >> 38  # Get top 26 bits
+    y = (val >> 26) & 0xFFF  # Get middle 12 bits
+    z = val & 0x3FFFFFF  # Get bottom 26 bits using mask
+
+    # Handle two's complement for signed values
+    # x: 26-bit signed (-2^25 to 2^25-1)
+    if x >= 2 ** 25:
+        x -= 2 ** 26
+
+    # y: 12-bit signed (-2^11 to 2^11-1)
+    if y >= 2 ** 11:
+        y -= 2 ** 12
+
+    # z: 26-bit signed (-2^25 to 2^25-1)
+    if z >= 2 ** 25:
+        z -= 2 ** 26
+
+    return (x, y, z)
