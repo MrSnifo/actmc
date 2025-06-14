@@ -1,14 +1,15 @@
 from typing import Optional
 
-from .entity import Player
+from .entity import Player, ObjectData
 from .tcp import TcpClient
-from .world import World
+from .world import World, BlockState
 from typing import TYPE_CHECKING, Callable, Any
 if TYPE_CHECKING:
     from .gateway import MinecraftSocket
 
 from . import math
 from . import protocol
+
 
 import logging
 
@@ -142,7 +143,6 @@ class ConnectionState:
         _logger.trace(  # type: ignore
             f"Parsing chunk ({chunk_x}, {chunk_z}), ground_up: {ground_up_continuous}, "
             f"bitmask: {bin(primary_bitmask)}, data_size: {chunk_data_size}")
-
         self.world.load_chunk(data.getvalue())
 
     def parse_0x2f(self, data: protocol.ProtocolBuffer) -> None:
@@ -199,22 +199,33 @@ class ConnectionState:
         y = protocol.read_double(data)
         z = protocol.read_double(data)
 
-        pitch = protocol.read_byte(data)  # Angle is a byte
-        yaw = protocol.read_byte(data)  # Angle is a byte
+        pitch = protocol.read_byte(data)
+        yaw = protocol.read_byte(data)
 
         object_data = protocol.read_int(data)
 
-        velocity_x = protocol.read_short(data)
-        velocity_y = protocol.read_short(data)
-        velocity_z = protocol.read_short(data)
-        print("works")
-        self._dispatch('spawn_object', {
-            'entity_id': entity_id,
-            'uuid': object_uuid,
-            'type': object_type,
-            'position': (x, y, z),
-            'rotation': {'pitch': pitch, 'yaw': yaw},
-            'data': object_data,
-            'velocity': (velocity_x, velocity_y, velocity_z)
-        })
+        vx = protocol.read_short(data)
+        vy = protocol.read_short(data)
+        vz = protocol.read_short(data)
+
+        obj = ObjectData(entity_id, object_uuid, object_type, object_data, math.Vector3D(vx, vy, vz))
+        self._dispatch('spawn_object', obj, math.Vector3D(x, y, z), math.Rotation(pitch, yaw))
+
+    def parse_0x0b(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Block Change (Packet ID: 0x0B)
+
+        Fired whenever a block is changed within the render distance.
+        """
+        position = protocol.read_position(data)
+        block_state_id = protocol.read_varint(data)
+
+        x, y, z = position
+        block_type = block_state_id >> 4
+        block_meta = block_state_id & 0xF
+
+        state =  BlockState(block_type, block_meta)
+        self._dispatch('block_change', state, math.Vector3D(x, y, z))
+        self.world.set_state(x, y, z, state)
+
 

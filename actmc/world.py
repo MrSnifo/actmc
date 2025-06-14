@@ -1,6 +1,8 @@
 import struct
 import math
 from typing import List, Dict, Optional, Tuple
+
+from .math import Vector3D
 from .protocol import ProtocolBuffer, write_varint, read_varint
 from .abc import Palette
 
@@ -478,12 +480,12 @@ class World:
         section.set_state(rel_x, rel_y, rel_z, state)
         return True
 
-    def get_state(self, x: int, y: int, z: int) -> Optional[BlockState]:
+    def get_state(self, position: Vector3D) -> Optional[BlockState]:
         """
         Get block state at world coordinates (x, y, z).
         Returns BlockState if chunk loaded and position valid, None otherwise.
         """
-        result = self._get_position_components(x, y, z)
+        result = self._get_position_components(int(position.x), int(position.y), int(position.z))
         if result is None:
             return None
 
