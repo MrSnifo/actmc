@@ -189,6 +189,33 @@ class ConnectionState:
         x, y, z = protocol.read_position(data)
         self._dispatch('player_use_bed', Entity(entity_id, entity_type='player'), math.Vector3D(x, y, z))
 
+
+    def parse_0x00(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Spawn Object (Packet ID: 0x00)
+
+        Sent when the server spawns an object such as a vehicle, item frame, projectile, etc.
+        """
+        entity_id = protocol.read_varint(data)
+        object_uuid = protocol.read_uuid(data)
+        object_type = protocol.read_byte(data)
+
+        x = protocol.read_double(data)
+        y = protocol.read_double(data)
+        z = protocol.read_double(data)
+
+        pitch = protocol.read_byte(data)
+        yaw = protocol.read_byte(data)
+
+        object_data = protocol.read_int(data)
+
+        vx = protocol.read_short(data)
+        vy = protocol.read_short(data)
+        vz = protocol.read_short(data)
+
+        obj = ObjectData(entity_id, object_uuid, object_type, object_data, math.Vector3D(vx, vy, vz))
+        self._dispatch('spawn_object', obj, math.Vector3D(x, y, z), math.Rotation(pitch, yaw))
+
     def parse_0x26(self, data: protocol.ProtocolBuffer) -> None:
         """
         Entity Relative Move (Packet ID: 0x26)

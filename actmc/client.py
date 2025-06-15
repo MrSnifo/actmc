@@ -19,6 +19,7 @@ class Client:
         self.socket: Optional[MinecraftSocket] = None
         self.tcp: TcpClient = TcpClient(host=host, port=port)
         # <!> load_chunk may consume 300MB+ of memory.
+        # <!> May block while loading chucks
         self._connection: ConnectionState = self._get_state(load_chunk=load_chunk)
         self._closing_task: Optional[asyncio.Task] = None
         self._closed = False
