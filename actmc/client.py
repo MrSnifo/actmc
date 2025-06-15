@@ -13,12 +13,13 @@ from .world import World
 _logger = logging.getLogger(__name__)
 
 class Client:
-    def __init__(self, host: str, port: Optional[int] = 25565):
+    def __init__(self, host: str, port: Optional[int] = 25565, load_chunk: bool = True):
         # todo: To None later...
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
         self.tcp: TcpClient = TcpClient(host=host, port=port)
-        self._connection: ConnectionState = self._get_state()
+        # <!> load_chunk may consume 300MB+ of memory.
+        self._connection: ConnectionState = self._get_state(load_chunk=load_chunk)
         self._closing_task: Optional[asyncio.Task] = None
         self._closed = False
         self._connection._get_socket = self._get_socket
@@ -38,8 +39,8 @@ class Client:
     def _get_socket(self) -> MinecraftSocket:
         return self.socket
 
-    def _get_state(self) -> ConnectionState:
-        return ConnectionState(tcp=self.tcp, dispatcher=self.dispatch)
+    def _get_state(self, **options) -> ConnectionState:
+        return ConnectionState(tcp=self.tcp, dispatcher=self.dispatch, **options)
 
     def is_closed(self):
         return self._closed
@@ -95,7 +96,7 @@ class Client:
         try:
             coro = getattr(self, method)
             if coro is not None and asyncio.iscoroutinefunction(coro):
-                _logger.debug('Dispatching event %s', event)
+                _logger.trace('Dispatching event %s', event) # type: ignore
                 wrapped = self._run_event(coro, method, *args, **kwargs)
                 # Schedule the task
                 self.loop.create_task(wrapped, name=f'twitch:{method}')

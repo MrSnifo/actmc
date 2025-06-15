@@ -1,11 +1,10 @@
 import struct
 import json
 import uuid
-import zlib
 import io
-from typing import Dict, Union, Any, Optional, Tuple
 from .errors import DataTooShortError, InvalidDataError
-
+from typing import Dict, Union, Optional, Tuple
+from .types import chat
 
 class ProtocolBuffer:
     """A wrapper around BytesIO with protocol-specific methods"""
@@ -139,16 +138,93 @@ def read_string(buffer: ProtocolBuffer, max_length: int = 32767) -> str:
         raise InvalidDataError(f"Invalid UTF-8 string: {e}")
 
 
-def read_chat(buffer: ProtocolBuffer) -> Dict[str, Any]:
-    """Read chat component from buffer"""
+
+def read_chat(buffer: ProtocolBuffer) -> chat.ChatComponent:
+    """Read and parse Minecraft chat component from buffer."""
     chat_json = read_string(buffer)
+
+    if not chat_json:
+        return {"text": ""}
+
     try:
-        return json.loads(chat_json)
-    except json.JSONDecodeError:
-        return {"text": chat_json}
+        parsed = json.loads(chat_json)
+        return normalize_component(parsed)
+    except (json.JSONDecodeError, TypeError):
+        return parse_legacy_format(chat_json)
 
 
-# Primitive type operations with struct format cache
+def normalize_component(component: Union[str, Dict, list]) -> chat.ChatComponent:
+    """Normalize chat component to proper format."""
+    if isinstance(component, str):
+        return {"text": component}
+
+    if isinstance(component, list):
+        if not component:
+            return {"text": ""}
+        parent = normalize_component(component[0])
+        if len(component) > 1:
+            parent["extra"] = [normalize_component(c) for c in component[1:]]
+        return parent
+
+    if isinstance(component, dict):
+        result = component.copy()
+        # Ensure text components have text field
+        if not any(key in result for key in ["text", "translate", "keybind", "score", "selector"]):
+            result["text"] = ""
+        # Normalize extra array
+        if "extra" in result and isinstance(result["extra"], list):
+            result["extra"] = [normalize_component(c) for c in result["extra"]]
+        return result
+
+    return {"text": str(component)}
+
+
+def parse_legacy_format(text: str) -> chat.ChatComponent:
+    """Parse legacy § format codes to JSON chat."""
+    if not text or '§' not in text and '&' not in text:
+        return {"text": text}
+
+    # Simple conversion - just strip format codes for now
+    clean_text = ""
+    i = 0
+    while i < len(text):
+        if i < len(text) - 1 and text[i] in ['§', '&']:
+            i += 2  # Skip format code
+        else:
+            clean_text += text[i]
+            i += 1
+
+    return {"text": clean_text}
+
+
+def chat_to_text(component: chat.ChatComponent) -> str:
+    """Convert chat component to plain text."""
+    if isinstance(component, str):
+        return component
+
+    if not isinstance(component, dict):
+        return str(component)
+
+    text = component.get("text", "")
+
+    # Handle translation components
+    if "translate" in component:
+        text = component["translate"]
+    elif "keybind" in component:
+        text = component["keybind"]
+    elif "score" in component and "value" in component["score"]:
+        text = str(component["score"]["value"])
+    elif "selector" in component:
+        text = component["selector"]
+
+    # Add extra components
+    if "extra" in component:
+        for extra in component["extra"]:
+            text += chat_to_text(extra)
+
+    return text
+
+# Primitive types operations with struct format cache
 _STRUCT_FORMATS = {
     'byte': struct.Struct('>b'),
     'ubyte': struct.Struct('>B'),

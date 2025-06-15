@@ -223,9 +223,9 @@ class Chunk:
     SECTIONS_PER_CHUNK = CHUNK_HEIGHT // SECTION_HEIGHT
 
     def __init__(self, x: int, z: int):
-        self.x = x
-        self.z = z
-        self.sections = [None] * self.SECTIONS_PER_CHUNK  # type: List[Optional[ChunkSection]]
+        self.x: int = x
+        self.z: int = z
+        self.sections: List[Optional[ChunkSection]] = [None] * self.SECTIONS_PER_CHUNK
         self.biomes = [1] * (self.CHUNK_WIDTH * self.CHUNK_WIDTH)  # Default to plains
         self.block_entities = []
 

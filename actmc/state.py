@@ -21,11 +21,12 @@ class ConnectionState:
     if TYPE_CHECKING:
         _get_socket: Callable[..., MinecraftSocket]
 
-    def __init__(self, tcp: TcpClient, dispatcher: Callable[..., Any],):
+    def __init__(self, tcp: TcpClient, dispatcher: Callable[..., Any], load_chunk: bool):
         self._dispatch = dispatcher
         self.username: Optional[str] = None
         self.tcp: TcpClient = tcp
         self.player: Optional[Player] = None
+        self.load_chunk = load_chunk
         self.world = World()
         self.entities = []
         self.dimension = 0
@@ -111,7 +112,7 @@ class ConnectionState:
         self.player.health = protocol.read_float(data)
         self.player.food = protocol.read_varint(data)
         self.player.food_saturation = protocol.read_float(data)
-        self._dispatch('update_player_health', self.player.health, self.player.food, self.player.food_saturation)
+        self._dispatch('player_health', self.player.health, self.player.food, self.player.food_saturation)
 
     def parse_0x40(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -122,7 +123,7 @@ class ConnectionState:
         self.player.experience_bar = protocol.read_float(data)
         self.player.level = protocol.read_varint(data)
         self.player.total_experience = protocol.read_varint(data)
-        self._dispatch('update_player_experience',
+        self._dispatch('player_experience',
                        self.player.level, self.player.total_experience, self.player.experience_bar)
 
     def parse_0x3a(self, data: protocol.ProtocolBuffer) -> None:
@@ -132,7 +133,7 @@ class ConnectionState:
         Sent by the server to update which hotbar slot the player has selected.
         """
         self.player.selected_slot = protocol.read_byte(data)
-        self._dispatch('update_player_held_slot', self.player.selected_slot)
+        self._dispatch('player_held_slot', self.player.selected_slot)
 
     def parse_0x20(self, data: protocol.ProtocolBuffer) -> None:
         chunk_x = protocol.read_int(data)
@@ -140,10 +141,13 @@ class ConnectionState:
         ground_up_continuous = protocol.read_bool(data)
         primary_bitmask = protocol.read_varint(data)
         chunk_data_size = protocol.read_varint(data)
-        _logger.trace(  # type: ignore
-            f"Parsing chunk ({chunk_x}, {chunk_z}), ground_up: {ground_up_continuous}, "
-            f"bitmask: {bin(primary_bitmask)}, data_size: {chunk_data_size}")
-        self.world.load_chunk(data.getvalue())
+        if self.load_chunk:
+            _logger.trace( # type: ignore
+                f"Parsing chunk ({chunk_x}, {chunk_z}), ground_up: {ground_up_continuous}, "
+                f"bitmask: {bin(primary_bitmask)}, data_size: {chunk_data_size}")
+            self.world.load_chunk(data.getvalue())
+        self._dispatch('load_chunk', data.getvalue())
+
 
     def parse_0x2f(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -173,7 +177,7 @@ class ConnectionState:
         self.player.position = math.Vector3D(x, y, z)
         self.player.rotation = math.Rotation(pitch, yaw)
 
-        self._dispatch('update_player_position_look', self.player.position, self.player.rotation, teleport_id)
+        self._dispatch('player_position_look', self.player.position, self.player.rotation, teleport_id)
 
     def parse_0x30(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -185,31 +189,53 @@ class ConnectionState:
         x, y, z = protocol.read_position(data)
         self._dispatch('player_use_bed', Entity(entity_id, entity_type='player'), math.Vector3D(x, y, z))
 
-    def parse_0x00(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x26(self, data: protocol.ProtocolBuffer) -> None:
         """
-        Spawn Object (Packet ID: 0x00)
+        Entity Relative Move (Packet ID: 0x26)
 
-        Sent when the server spawns an object such as a vehicle, item frame, projectile, etc.
+        Sent by the server when an entity moves less than 8 blocks. For movements larger than that,
+        the server uses Entity Teleport.
         """
         entity_id = protocol.read_varint(data)
-        object_uuid = protocol.read_uuid(data)
-        object_type = protocol.read_byte(data)
+        delta_x = protocol.read_short(data)
+        delta_y = protocol.read_short(data)
+        delta_z = protocol.read_short(data)
 
-        x = protocol.read_double(data)
-        y = protocol.read_double(data)
-        z = protocol.read_double(data)
+        on_ground = protocol.read_bool(data)
+        delta_position = math.Vector3D(delta_x, delta_y, delta_z)
 
-        pitch = protocol.read_byte(data)
-        yaw = protocol.read_byte(data)
+        self._dispatch('entity_teleport', Entity(entity_id), delta_position, on_ground)
 
-        object_data = protocol.read_int(data)
+    def parse_0x27(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Entity Look And Relative Move (Packet ID: 0x27)
 
-        vx = protocol.read_short(data)
-        vy = protocol.read_short(data)
-        vz = protocol.read_short(data)
+        Sent by the server when an entity moves up to 8 blocks and changes rotation.
 
-        obj = ObjectData(entity_id, object_uuid, object_type, object_data, math.Vector3D(vx, vy, vz))
-        self._dispatch('spawn_object', obj, math.Vector3D(x, y, z), math.Rotation(pitch, yaw))
+        Fields:
+            - Entity ID (VarInt): The entity that is moving and rotating.
+            - Delta X (Short): Change in X position (fixed-point).
+            - Delta Y (Short): Change in Y position (fixed-point).
+            - Delta Z (Short): Change in Z position (fixed-point).
+            - Yaw (Byte/Angle): New yaw angle (not a delta).
+            - Pitch (Byte/Angle): New pitch angle (not a delta).
+            - On Ground (Boolean): Whether the entity is on the ground.
+        """
+        entity_id = protocol.read_varint(data)
+
+        delta_x = protocol.read_short(data)
+        delta_y = protocol.read_short(data)
+        delta_z = protocol.read_short(data)
+
+        yaw = protocol.read_ubyte(data)
+        pitch = protocol.read_ubyte(data)
+
+        on_ground = protocol.read_bool(data)
+
+        delta_position = math.Vector3D(delta_x, delta_y, delta_z)
+        rotation = math.Rotation(yaw, pitch)
+
+        self._dispatch('entity_look_move', entity_id, delta_position, rotation, on_ground)
 
     def parse_0x0b(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -228,7 +254,8 @@ class ConnectionState:
 
 
         self._dispatch('block_change', state, vector)
-        self.world.set_state(vector, state)
+        if self.load_chunk:
+            self.world.set_state(vector, state)
 
     def parse_0x10(self, data: protocol.ProtocolBuffer) -> None:
         """
@@ -261,10 +288,30 @@ class ConnectionState:
             state = BlockState(block_type, block_meta)
             vector = math.Vector3D(int(x), int(y), int(z))
             changes.append((state, vector))
-            self.world.set_state(vector, state)
+            if self.load_chunk:
+                self.world.set_state(vector, state)
 
         # Dispatch once with all changes
         self._dispatch('multi_block_change', changes)
+
+    def parse_0x0f(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Chat Message (Packet ID: 0x0F)
+
+        Sent by the server to deliver chat, system, or game info messages.
+
+        Fields:
+            - JSON Data (Chat): The message content in JSON format.
+            - Position (Byte): The display location:
+                0 = Chat (chat box),
+                1 = System message (chat box),
+                2 = Game info (above hotbar).
+        """
+        message = protocol.read_chat(data)
+        display = protocol.read_ubyte(data)
+
+        display_str = {0: 'chat', 1: 'system', 2: 'game'}.get(display, f"unknown ({display})")
+        self._dispatch('chat_message', display_str, message)
 
 
 
