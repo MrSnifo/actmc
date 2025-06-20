@@ -37,7 +37,14 @@ if TYPE_CHECKING:
 
 class BlockEntity:
     """
-    Represents a block entity with NBT data..
+    Represents a block entity with NBT data.
+
+    Parameters
+    ----------
+    entity_id: str
+        The entity identifier.
+    nbt_data: Dict[str, Any]
+        The NBT data associated with the entity.
 
     Attributes
     ----------
@@ -46,11 +53,11 @@ class BlockEntity:
     data: Dict[str, Any]
         The NBT data associated with the entity.
     """
-    __slots__ = ('id', 'position', 'data')
+    __slots__ = ('id', 'data')
 
     def __init__(self, entity_id: str, nbt_data: Dict[str, Any]) -> None:
         self.id: str = entity_id
-        self.data: Dict[str, Any]  = nbt_data
+        self.data: Dict[str, Any] = nbt_data
 
     def has_nbt_data(self) -> bool:
         """
@@ -69,15 +76,25 @@ class BlockEntity:
     def __repr__(self) -> str:
         return f"<BlockEntity id={self.id}, has_nbt={self.has_nbt_data()}>"
 
+
 class BlockState:
     """
     Represents the state of a block in the world, including its type, metadata, position, and associated entity.
 
+    Parameters
+    ----------
+    block_id: int
+        The block ID. Note: A value of -1 indicates this block state exists only
+        to hold Block Entity data (no physical block present).
+    metadata: int, optional
+        The block metadata, by default 0.
+    position: Vector3D[int], optional
+        The world position of the block, by default None.
+
     Attributes
     ----------
     id: int
-        The block ID. Note: A value of -1 indicates this block state exists only
-        to hold Block Entity data (no physical block present).
+        The block ID.
     metadata: int
         The block metadata.
     position: Vector3D[int] or None
@@ -128,6 +145,11 @@ class BlockState:
 class IndirectPalette:
     """
     Indirect palette that maps local indices to global palette IDs.
+
+    Parameters
+    ----------
+    bits_per_block: int
+        Number of bits used to represent each block (minimum 4).
 
     Attributes
     ----------
@@ -346,22 +368,29 @@ class ChunkSection:
     """
     Represents a 16x16x16 chunk section with flat array storage for maximum performance.
 
+    Parameters
+    ----------
+    chunk_pos: Vector2D[int]
+        The chunk position in the world.
+    section_y: int, optional
+        The Y level of this section within the chunk, by default 0.
+
     Attributes
     ----------
     chunk_pos: Vector2D[int]
-        The chunk position in the world
+        The chunk position in the world.
     section_y: int
-        The Y level of this section within the chunk
+        The Y level of this section within the chunk.
     block_ids: array.array
-        Flat array of block IDs
+        Flat array of block IDs.
     block_metadata: array.array
-        Flat array of block metadata
+        Flat array of block metadata.
     block_light: array.array
-        Flat array of block light levels
+        Flat array of block light levels.
     sky_light: array.array
-        Flat array of sky-light levels
+        Flat array of sky-light levels.
     palette: Optional[Union[IndirectPalette, DirectPalette]]
-        The palette used for this section
+        The palette used for this section.
     """
 
     __slots__ = ('chunk_pos', 'section_y', 'block_ids', 'block_metadata', 'block_light', 'sky_light', 'palette',
@@ -417,6 +446,16 @@ class ChunkSection:
         return state
 
     def set_state(self, pos: Vector3D[int], state: BlockState) -> None:
+        """
+        Set block state at coordinates.
+
+        Parameters
+        ----------
+        pos: Vector3D[int]
+            The position coordinates within the section.
+        state: BlockState
+            The block state to set.
+        """
         idx = self._get_index(pos.x, pos.y, pos.z)
         self.block_ids[idx] = state.id
         self.block_metadata[idx] = state.metadata
@@ -425,6 +464,16 @@ class ChunkSection:
             del self._block_entities[idx]
 
     def set_entity(self, pos: Vector3D[int], entity: BlockEntity) -> None:
+        """
+        Set block entity at coordinates.
+
+        Parameters
+        ----------
+        pos: Vector3D[int]
+            The position coordinates within the section.
+        entity: BlockEntity
+            The block entity to set.
+        """
         idx = self._get_index(pos.x, pos.y, pos.z)
         self._block_entities[idx] = entity
 
@@ -457,7 +506,7 @@ class ChunkSection:
         pos: Vector3D[int]
             The position coordinates.
         light: int
-            The light level to set
+            The light level to set.
         """
         self.block_light[self._get_index(pos.x, pos.y, pos.z)] = light & 0xF
 
@@ -569,6 +618,11 @@ class Chunk:
     """
     Represents a chunk in the world, identified by its x and z coordinates, containing multiple sections and biome data.
 
+    Parameters
+    ----------
+    chunk_pos: Vector2D[int]
+        The chunk position in the world.
+
     Attributes
     ----------
     position: Vector2D[int]
@@ -581,15 +635,15 @@ class Chunk:
 
     __slots__ = ('position', 'sections', 'biomes')
 
-    def __init__(self, chunk_pos: Vector2D[int]) -> None:
-        self.position: Vector2D[int] = chunk_pos
-        self.sections: List[Optional[ChunkSection]] = [None] * self.SECTIONS_PER_CHUNK
-        self.biomes = array.array('B', [1] * (self.CHUNK_WIDTH * self.CHUNK_WIDTH))
-
     CHUNK_WIDTH: ClassVar[int] = 16
     CHUNK_HEIGHT: ClassVar[int] = 256
     SECTION_HEIGHT: ClassVar[int] = 16
     SECTIONS_PER_CHUNK: ClassVar[int] = CHUNK_HEIGHT // SECTION_HEIGHT
+
+    def __init__(self, chunk_pos: Vector2D[int]) -> None:
+        self.position: Vector2D[int] = chunk_pos
+        self.sections: List[Optional[ChunkSection]] = [None] * self.SECTIONS_PER_CHUNK
+        self.biomes = array.array('B', [1] * (self.CHUNK_WIDTH * self.CHUNK_WIDTH))
 
     def get_section(self, section_y: int) -> Optional[ChunkSection]:
         """
