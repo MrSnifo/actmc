@@ -150,7 +150,7 @@ class ConnectionState:
         section.set_state(block_pos, state)
 
 
-    def set_block_entity(self, position: math.Vector3D, entity: BlockEntity) -> None:
+    def set_block_entity(self, position: math.Vector3D[int], entity: BlockEntity) -> None:
         if not self._load_chunks:
             raise RuntimeError("Chunk loading disabled.")
 
@@ -200,7 +200,7 @@ class ConnectionState:
 
         # Potato pc safety.
         if self._load_chunks:
-            _logger.warning("Chunk loading is enabled - may cause freezes or high memory usage.")
+            _logger.warning("Chunk loading is enabled. May cause stutter and memory growth.")
 
         self._dispatch('handshake')
 
@@ -358,5 +358,13 @@ class ConnectionState:
         # Dispatch the event
         self._dispatch('block_entity_update', action_name, pos, entity)
 
+    def parse_0x1d(self, data: protocol.ProtocolBuffer) -> None:
+        """Unload Chunk (Packet ID: 0x1D)"""
+        chunk_x = protocol.read_int(data)
+        chunk_z = protocol.read_int(data)
+        position = math.Vector2D(chunk_x, chunk_z)
 
+        if self._load_chunks:
+            self.chunks.pop(position, None)
 
+        self._dispatch('chunk_unload', position)

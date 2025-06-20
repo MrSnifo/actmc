@@ -92,7 +92,7 @@ class MessageEvent:
 
 
 class Message:
-    """"A class to handle Minecraft chat messages with full formatting and event support."""
+    """A class to handle Minecraft chat messages with full formatting and event support."""
     COLOR_MAP: Dict[str, str] = {
         'black': '§0', 'dark_blue': '§1', 'dark_green': '§2', 'dark_aqua': '§3',
         'dark_red': '§4', 'dark_purple': '§5', 'gold': '§6', 'gray': '§7',
