@@ -2,10 +2,6 @@ from typing import Optional
 import logging
 
 
-
-
-
-
 LOGGER_TRACE: int = 5
 logging.addLevelName(LOGGER_TRACE, "TRACE")
 
@@ -15,12 +11,10 @@ def trace(self, message, *args, **kwargs):
 
 logging.Logger.trace = trace
 
-def setup_logging(*,
-                  handler: Optional[logging.Handler] = None,
+def setup_logging(handler: Optional[logging.Handler] = None,
                   level: Optional[int] = None,
                   root: bool = True) -> None:
-    """
-    Setup logging configuration, including custom TRACE level.
+    """Setup logging configuration, including custom TRACE level.
     """
     if level is None:
         level = logging.INFO
@@ -48,3 +42,4 @@ def setup_logging(*,
     handler.setFormatter(formatter)
     logger.setLevel(level)
     logger.addHandler(handler)
+

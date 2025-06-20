@@ -3,8 +3,8 @@ import json
 import uuid
 import io
 from .errors import DataTooShortError, InvalidDataError
-from typing import Dict, Union, Optional, Tuple
-from .types import chat
+from typing import Union, Optional, Tuple, Dict, List, Any
+from .enums import NBTTagType
 
 class ProtocolBuffer:
     """A wrapper around BytesIO with protocol-specific methods"""
@@ -138,91 +138,75 @@ def read_string(buffer: ProtocolBuffer, max_length: int = 32767) -> str:
         raise InvalidDataError(f"Invalid UTF-8 string: {e}")
 
 
+def read_chat(data: ProtocolBuffer) -> Union[str, Dict, List]:
+    """
+    Read a chat component from the protocol buffer.
 
-def read_chat(buffer: ProtocolBuffer) -> chat.ChatComponent:
-    """Read and parse Minecraft chat component from buffer."""
-    chat_json = read_string(buffer)
+    Chat data is sent as a UTF-8 encoded JSON string in the protocol.
+    The JSON can represent:
+    - A simple string (converted to string component)
+    - A JSON object (chat component)
+    - A JSON array (array of components)
 
-    if not chat_json:
-        return {"text": ""}
+    Args:
+        data: ProtocolBuffer containing the packet data
 
+    Returns:
+        Parsed JSON data as string, dict, or list
+
+    Raises:
+        ValueError: If JSON parsing fails
+        IndexError: If not enough data in buffer
+    """
     try:
-        parsed = json.loads(chat_json)
-        return normalize_component(parsed)
-    except (json.JSONDecodeError, TypeError):
-        return parse_legacy_format(chat_json)
+        json_string = read_string(data, 262144)
+
+        # Handle empty string
+        if not json_string:
+            return ""
+
+        # Try to parse as JSON
+        try:
+            parsed_json = json.loads(json_string)
+            return parsed_json
+        except json.JSONDecodeError:
+            # If JSON parsing fails, treat as plain text
+            # This handles cases where raw text is sent instead of JSON
+            return json_string
+
+    except (IndexError, struct.error) as e:
+        raise ValueError(f"Failed to read chat data: {e}")
 
 
-def normalize_component(component: Union[str, Dict, list]) -> chat.ChatComponent:
-    """Normalize chat component to proper format."""
-    if isinstance(component, str):
-        return {"text": component}
+def read_chat_lenient(data: ProtocolBuffer) -> Union[str, Dict, List]:
+    """
+    Read chat data with lenient JSON parsing.
+    Used for disconnect packets and written book text.
 
-    if isinstance(component, list):
-        if not component:
-            return {"text": ""}
-        parent = normalize_component(component[0])
-        if len(component) > 1:
-            parent["extra"] = [normalize_component(c) for c in component[1:]]
-        return parent
+    This version is more forgiving with malformed JSON.
+    """
+    try:
+        json_string = read_string(data, max_length=262144)
 
-    if isinstance(component, dict):
-        result = component.copy()
-        # Ensure text components have text field
-        if not any(key in result for key in ["text", "translate", "keybind", "score", "selector"]):
-            result["text"] = ""
-        # Normalize extra array
-        if "extra" in result and isinstance(result["extra"], list):
-            result["extra"] = [normalize_component(c) for c in result["extra"]]
-        return result
+        if not json_string:
+            return ""
 
-    return {"text": str(component)}
+        # Try lenient parsing - allow some JSON errors
+        try:
+            # First try normal JSON parsing
+            return json.loads(json_string)
+        except json.JSONDecodeError:
+            try:
+                # Try with some common fixes for malformed JSON
+                # Fix single quotes to double quotes
+                fixed_string = json_string.replace("'", '"')
+                return json.loads(fixed_string)
+            except json.JSONDecodeError:
+                # If all else fails, return as plain text
+                return json_string
 
-
-def parse_legacy_format(text: str) -> chat.ChatComponent:
-    """Parse legacy § format codes to JSON chat."""
-    if not text or '§' not in text and '&' not in text:
-        return {"text": text}
-
-    # Simple conversion - just strip format codes for now
-    clean_text = ""
-    i = 0
-    while i < len(text):
-        if i < len(text) - 1 and text[i] in ['§', '&']:
-            i += 2  # Skip format code
-        else:
-            clean_text += text[i]
-            i += 1
-
-    return {"text": clean_text}
-
-
-def chat_to_text(component: chat.ChatComponent) -> str:
-    """Convert chat component to plain text."""
-    if isinstance(component, str):
-        return component
-
-    if not isinstance(component, dict):
-        return str(component)
-
-    text = component.get("text", "")
-
-    # Handle translation components
-    if "translate" in component:
-        text = component["translate"]
-    elif "keybind" in component:
-        text = component["keybind"]
-    elif "score" in component and "value" in component["score"]:
-        text = str(component["score"]["value"])
-    elif "selector" in component:
-        text = component["selector"]
-
-    # Add extra components
-    if "extra" in component:
-        for extra in component["extra"]:
-            text += chat_to_text(extra)
-
-    return text
+    except (IndexError, struct.error) as e:
+        raise ValueError(f"Failed to read chat data: {e}")
 
 # Primitive types operations with struct format cache
 _STRUCT_FORMATS = {
@@ -403,4 +387,109 @@ def read_position(buffer: ProtocolBuffer) -> Tuple[int, int, int]:
     if z >= 2 ** 25:
         z -= 2 ** 26
 
-    return (x, y, z)
+    return x, y, z
+
+
+def read_nbt(buffer: ProtocolBuffer) -> Dict[str, Any]:
+    """Read NBT buffer from protocol buffer - starts with a compound tag"""
+    tag_type = read_ubyte(buffer)
+
+    if tag_type != NBTTagType.TAG_COMPOUND:
+        raise ValueError(f"NBT must start with TAG_Compound, got tag type: {tag_type}")
+
+    # Read the root compound name
+    root_name = _read_nbt_string(buffer)
+
+    # Read the compound contents
+    compound_buffer = _read_compound_payload(buffer)
+
+    return {root_name: compound_buffer} if root_name else compound_buffer
+
+
+def _read_nbt_string(buffer: ProtocolBuffer) -> str:
+    """Read NBT string (length-prefixed with unsigned short)"""
+    length = read_ushort(buffer)  # unsigned short (2 bytes)
+    if length == 0:
+        return ""
+    return buffer.read(length).decode('utf-8')
+
+
+def _read_compound_payload(buffer: ProtocolBuffer) -> Dict[str, Any]:
+    """Read the payload of a compound tag"""
+    compound = {}
+
+    while True:
+        tag_type = read_ubyte(buffer)
+
+        if tag_type == NBTTagType.TAG_END:
+            break
+
+        # Read tag name
+        name = _read_nbt_string(buffer)
+
+        # Read tag payload
+        value = _read_nbt_payload(buffer, tag_type)
+        compound[name] = value
+
+    return compound
+
+
+def _read_list_payload(buffer: ProtocolBuffer) -> List[Any]:
+    """Read the payload of a list tag"""
+    list_type = read_ubyte(buffer)
+    length = read_int(buffer)  # signed int (4 bytes)
+
+    items = []
+    for _ in range(length):
+        # List items have no names, just payloads
+        items.append(_read_nbt_payload(buffer, list_type))
+
+    return items
+
+
+def _read_nbt_payload(buffer: ProtocolBuffer, tag_type: int) -> Any:
+    """Read the payload of an NBT tag based on its type"""
+    if tag_type == NBTTagType.TAG_END:
+        return None
+
+    elif tag_type == NBTTagType.TAG_BYTE:
+        return read_byte(buffer)  # signed byte
+
+    elif tag_type == NBTTagType.TAG_SHORT:
+        return read_short(buffer)  # signed short, big-endian
+
+    elif tag_type == NBTTagType.TAG_INT:
+        return read_int(buffer)  # signed int, big-endian
+
+    elif tag_type == NBTTagType.TAG_LONG:
+        return read_long(buffer)  # signed long, big-endian
+
+    elif tag_type == NBTTagType.TAG_FLOAT:
+        return read_float(buffer)  # IEEE-754 single precision, big-endian
+
+    elif tag_type == NBTTagType.TAG_DOUBLE:
+        return read_double(buffer)  # IEEE-754 double precision, big-endian
+
+    elif tag_type == NBTTagType.TAG_BYTE_ARRAY:
+        length = read_int(buffer)  # signed int (4 bytes)
+        return [read_byte(buffer) for _ in range(length)]
+
+    elif tag_type == NBTTagType.TAG_STRING:
+        return _read_nbt_string(buffer)
+
+    elif tag_type == NBTTagType.TAG_LIST:
+        return _read_list_payload(buffer)
+
+    elif tag_type == NBTTagType.TAG_COMPOUND:
+        return _read_compound_payload(buffer)
+
+    elif tag_type == NBTTagType.TAG_INT_ARRAY:
+        length = read_int(buffer)  # signed int (4 bytes)
+        return [read_int(buffer) for _ in range(length)]
+
+    elif tag_type == NBTTagType.TAG_LONG_ARRAY:
+        length = read_int(buffer)  # signed int (4 bytes)
+        return [read_long(buffer) for _ in range(length)]
+
+    else:
+        raise ValueError(f"Unknown NBT tag type: {tag_type}")

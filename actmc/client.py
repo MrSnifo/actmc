@@ -5,43 +5,34 @@ from typing import Optional, Literal, Any, Callable
 import asyncio
 from .utils import setup_logging
 from .tcp import TcpClient
+from . import math
 from .state import ConnectionState
-import logging
-from .entity import Player
-from .world import World
 
+import logging
 _logger = logging.getLogger(__name__)
 
 class Client:
-    def __init__(self, host: str, port: Optional[int] = 25565, load_chunk: bool = True):
+    def __init__(self, host: str, port: Optional[int] = 25565):
         # todo: To None later...
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
         self.tcp: TcpClient = TcpClient(host=host, port=port)
         # <!> load_chunk may consume 300MB+ of memory.
         # <!> May block while loading chucks
-        self._connection: ConnectionState = self._get_state(load_chunk=load_chunk)
+        self._connection: ConnectionState = self._get_state()
+
         self._closing_task: Optional[asyncio.Task] = None
         self._closed = False
         self._connection._get_socket = self._get_socket
 
-    async def send_player_position_and_look(self, x: float, y: float, z: float, yaw: float, pitch: float,
-                                            on_ground: bool):
-        await self._connection.send_player_position_and_look(x, y, z, yaw, pitch, on_ground)
-
-    @property
-    def player(self) -> Optional[Player]:
-        return self._connection.player
-
-    @property
-    def world(self) -> Optional[World]:
-        return self._connection.world
-
     def _get_socket(self) -> MinecraftSocket:
         return self.socket
 
-    def _get_state(self, **options) -> ConnectionState:
-        return ConnectionState(tcp=self.tcp, dispatcher=self.dispatch, **options)
+    def get_block(self, pos: math.Vector3D[int]):
+        return self._connection.get_block_state(pos)
+
+    def _get_state(self) -> ConnectionState:
+        return ConnectionState(tcp=self.tcp, dispatcher=self.dispatch)
 
     def is_closed(self):
         return self._closed
@@ -62,7 +53,7 @@ class Client:
             print("ERROR - Something went wrong")
 
     @staticmethod
-    async def on_error(event_name: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
+    async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
         """
         Handle errors occurring during event dispatch.
 
@@ -70,8 +61,8 @@ class Client:
 
         Parameters
         ----------
-        event_name: str
-            The name of the event that caused the error.
+        packet_id: str
+            The packet id of the event that caused the error.
         error: Exception
             The exception that was raised.
         *args: Any
@@ -79,7 +70,7 @@ class Client:
         **kwargs: Any
             Keyword arguments passed to the event.
         """
-        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, event_name,
+        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id,
                           args, kwargs)
 
     async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
