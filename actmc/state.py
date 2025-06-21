@@ -32,7 +32,7 @@ from .ui.chat import Message
 from .chunk import Chunk, BlockState, ChunkSection, BlockEntity
 from . import entity
 from . import math
-import time
+
 if TYPE_CHECKING:
     from typing import Optional, Dict, Callable, Any, Tuple, Literal, List
     from .gateway import MinecraftSocket
@@ -48,9 +48,6 @@ __all__ = ('ConnectionState',)
 class ConnectionState:
     """
     Manages the connection state and packet handling for a Minecraft client.
-
-    This class handles packet parsing, sending, and maintains the connection state
-    with improved performance through caching and optimized packet handling.
     """
 
     if TYPE_CHECKING:

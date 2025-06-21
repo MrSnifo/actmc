@@ -25,17 +25,17 @@ class BlockEntityAction(IntEnum):
     Each action type corresponds to a specific type of block entity update
     as defined in the Minecraft protocol.
     """
-    MOB_SPAWNER = 1  # Set data of a mob spawner
-    COMMAND_BLOCK = 2  # Set command block text
-    BEACON = 3  # Set beacon powers
-    MOB_HEAD = 4  # Set rotation and skin of mob head
-    FLOWER_POT = 5  # Set type of flower in flower pot
-    BANNER = 6  # Set base color and patterns on a banner
-    STRUCTURE = 7  # Set data for a Structure tile entity
-    END_GATEWAY = 8  # Set destination for an end gateway
-    SIGN = 9  # Set text on a sign
-    SHULKER_BOX = 10  # Declare a shulker box
-    BED = 11  # Set color of a bed
+    MOB_SPAWNER = 1
+    COMMAND_BLOCK = 2
+    BEACON = 3
+    MOB_HEAD = 4
+    FLOWER_POT = 5
+    BANNER = 6
+    STRUCTURE = 7
+    END_GATEWAY = 8
+    SIGN = 9
+    SHULKER_BOX = 10
+    BED = 11
 
 
 class GameMode(IntEnum):
