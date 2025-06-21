@@ -36,3 +36,23 @@ class BlockEntityAction(IntEnum):
     SIGN = 9  # Set text on a sign
     SHULKER_BOX = 10  # Declare a shulker box
     BED = 11  # Set color of a bed
+
+
+class GameMode(IntEnum):
+    SURVIVAL = 0
+    CREATIVE = 1
+    ADVENTURE = 2
+    SPECTATOR = 3
+
+
+class Dimension(IntEnum):
+    NETHER = -1
+    OVERWORLD = 0
+    END = 1
+
+
+class Difficulty(IntEnum):
+    PEACEFUL = 0
+    EASY = 1
+    NORMAL = 2
+    HARD = 3

@@ -25,13 +25,16 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from .enums import BlockEntityAction
+from . import enums
 from . import protocol
+import asyncio
 from .ui.chat import Message
 from .chunk import Chunk, BlockState, ChunkSection, BlockEntity
+from . import entity
 from . import math
+import time
 if TYPE_CHECKING:
-    from typing import Optional, Dict, Callable, Any, Tuple
+    from typing import Optional, Dict, Callable, Any, Tuple, Literal, List
     from .gateway import MinecraftSocket
     from .tcp import TcpClient
 
@@ -60,8 +63,16 @@ class ConnectionState:
         self._dispatch: Callable[..., Any] = dispatcher
         self._load_chunks: bool = True
 
+        # Waiters.
+        self._waiters: Dict[str, List[asyncio.Future]] = {}
+
         # Player
-        self.username: Optional[str] = None
+        self.player: Optional[entity.Player] = None
+
+        # Server
+        self.server_difficulty: Optional[int] = None
+        self.server_max_players: Optional[int] = None
+        self.server_world_type: Optional[int] = None
 
         # World
         self.chunks: Dict[math.Vector2D, Chunk] = {}
@@ -69,104 +80,6 @@ class ConnectionState:
         # Parser mapping for better performance
         if not self._packet_parsers:
             self._build_parser_cache()
-
-    @staticmethod
-    def _get_position_components(position: math.Vector3D[int]) -> Tuple[math.Vector2D[int], math.Vector3D[int], int]:
-
-        x, y, z = position
-        chunk_x, rel_x = x >> 4, x & 0xF
-        chunk_z, rel_z = z >> 4, z & 0xF
-        section_y, rel_y = y // 16, y % 16
-        return math.Vector2D(chunk_x, chunk_z), math.Vector3D(rel_x, rel_y, rel_z), section_y
-
-    def get_chunks(self, position: math.Vector3D[int]) -> Optional[Chunk]:
-        """
-        Get the chunk at the specified position.
-
-        Parameters
-        ----------
-        position:math.Vector3D[int]
-            The world position to get the chunk for
-
-        Returns
-        -------
-        Optional[Chunk]
-            The chunk at the position, or None if not loaded
-
-        Raises
-        ------
-        RuntimeError
-            If Chunk loading disabled.
-        """
-        if not self._load_chunks:
-            raise RuntimeError("Chunk loading disabled.")
-        chunk_cords, _, _ = self._get_position_components(position)
-        return self.chunks.get(chunk_cords)
-
-    def get_block_state(self, position: math.Vector3D[int]) -> Optional[BlockState]:
-        """
-        Get the block state at the specified world position.
-
-        Parameters
-        ----------
-        position:math.Vector3D[int]
-            The world position to get the block state for
-
-        Returns
-        -------
-        Optional[BlockState]
-            The block state at the position, or None if chunk/section not loaded
-
-        Raises
-        ------
-        RuntimeError
-            If Chunk loading disabled.
-        """
-        if not self._load_chunks:
-            raise RuntimeError("Chunk loading disabled.")
-        chunk_cords, block_pos, section_y = self._get_position_components(position)
-        chunk = self.chunks.get(chunk_cords)
-        if chunk is None:
-            return None
-
-        section = chunk.get_section(section_y)
-        if section is None:
-            return None
-        return section.get_state(block_pos)
-
-    def set_block_state(self, state: BlockState) -> None:
-        if not self._load_chunks:
-            raise RuntimeError("Chunk loading disabled.")
-
-        chunk_cords, block_pos, section_y = self._get_position_components(state.position)
-        chunk = self.chunks.get(chunk_cords)
-        if chunk is None:
-            return
-
-        section = chunk.get_section(section_y)
-        if section is None:
-            section = ChunkSection(math.Vector2D(0, 0))
-            chunk.set_section(section_y, section)
-        section.set_state(block_pos, state)
-
-
-    def set_block_entity(self, position: math.Vector3D[int], entity: BlockEntity) -> None:
-        if not self._load_chunks:
-            raise RuntimeError("Chunk loading disabled.")
-
-        chunk_cords, block_pos, section_y = self._get_position_components(position)
-        chunk = self.chunks.get(chunk_cords)
-        if chunk is None:
-            return
-
-        section = chunk.get_section(section_y)
-        if section is None:
-            section = ChunkSection(math.Vector2D(0, 0))
-            chunk.set_section(section_y, section)
-
-        section.set_entity(block_pos, entity)
-
-
 
     @classmethod
     def _build_parser_cache(cls) -> None:
@@ -179,23 +92,49 @@ class ConnectionState:
                 except ValueError:
                     continue
 
+    async def _wait_for(self, event: str, timeout: Optional[float] = 30.0) -> Any:
+        """Wait for an event, or return cached data if recent."""
+        future = asyncio.Future()
+        if event not in self._waiters:
+            self._waiters[event] = []
+        self._waiters[event].append(future)
+
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            if event in self._waiters and future in self._waiters[event]:
+                self._waiters[event].remove(future)
+            raise asyncio.TimeoutError(f"Timed out waiting for {event}")
+
+    def _trigger_event(self, event: str, data: Any = None) -> None:
+        """Trigger the event: cache it and notify all current waiters."""
+        if event in self._waiters:
+            for future in self._waiters[event]:
+                if not future.done():
+                    future.set_result(data)
+            self._waiters[event].clear()
+
+    def _has_waiters(self, event: str) -> bool:
+        return event in self._waiters and any(not f.done() for f in self._waiters[event])
+
+
     def _get_socket(self) -> Optional[MinecraftSocket]:
         """Get the socket - this method will be overridden by the Client class."""
 
-    async def send_packet(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
+    async def send_packet(self, packet_id: int, buffer: bytes) -> None:
         """Send a packet to the server with improved error handling."""
         socket = self._get_socket()
         if not socket:
             raise RuntimeError("Socket is not initialized or not connected.")
 
-        await socket.write_packet(packet_id=packet_id, data=buffer.getvalue())
+        await socket.write_packet(packet_id=packet_id, data=buffer)
 
-    async def send_initial_packets(self) -> None:
+    async def send_initial_packets(self, username: str) -> None:
         """Send initial handshake and login packets with better error handling."""
         handshake_packet = self.tcp.build_handshake_packet
-        login_packet = self.tcp.build_login_packet(self.username)
-        await self.send_packet(0x00, handshake_packet)
-        await self.send_packet(0x00, login_packet)
+        login_packet = self.tcp.build_login_packet(username)
+        await self.send_packet(0x00, handshake_packet.getvalue())
+        await self.send_packet(0x00, login_packet.getvalue())
         _logger.debug("Sent handshake and login packets.")
 
         # Potato pc safety.
@@ -204,6 +143,70 @@ class ConnectionState:
 
         self._dispatch('handshake')
 
+    # --------------------------------------+ Chunk +--------------------------------------
+    @staticmethod
+    def _get_position_components(position: math.Vector3D[int]) -> Tuple[math.Vector2D[int], math.Vector3D[int], int]:
+        x, y, z = position
+        chunk_x, rel_x = x >> 4, x & 0xF
+        chunk_z, rel_z = z >> 4, z & 0xF
+        section_y, rel_y = y // 16, y % 16
+        return math.Vector2D(chunk_x, chunk_z), math.Vector3D(rel_x, rel_y, rel_z), section_y
+
+    def get_block_state(self, position: math.Vector3D[int]) -> Optional[BlockState]:
+        if not self._load_chunks:
+            raise RuntimeError("Chunk loading is disabled.")
+
+        chunk_cords, block_pos, section_y = self._get_position_components(position)
+        chunk = self.chunks.get(chunk_cords)
+        if chunk is None:
+            return None
+
+        section = chunk.get_section(section_y)
+        if section is None:
+            return None
+        return section.get_state(block_pos)
+
+    def set_block_state(self, state: BlockState) -> None:
+        if not self._load_chunks:
+            raise RuntimeError("Chunk loading is disabled.")
+
+        chunk_cords, block_pos, section_y = self._get_position_components(state.position)
+        chunk = self.chunks.get(chunk_cords)
+        if chunk is None:
+            return
+
+        section = chunk.get_section(section_y)
+        if section is None:
+            section = ChunkSection(math.Vector2D(0, 0))
+            chunk.set_section(section_y, section)
+        section.set_state(block_pos, state)
+
+    def set_block_entity(self, position: math.Vector3D[int], entity: BlockEntity) -> None:
+        if not self._load_chunks:
+            raise RuntimeError("Chunk loading is disabled.")
+
+        chunk_cords, block_pos, section_y = self._get_position_components(position)
+        chunk = self.chunks.get(chunk_cords)
+        if chunk is None:
+            return
+
+        section = chunk.get_section(section_y)
+        if section is None:
+            section = ChunkSection(math.Vector2D(0, 0))
+            chunk.set_section(section_y, section)
+        section.set_entity(block_pos, entity)
+
+    # -------------------------------------------------------------------------------
+    # --------------------------------------+ Parser +--------------------------------------
+
+
+
+
+
+
+
+
+    # --------------------------------------+ Parser +--------------------------------------
     def parse(self, packet_id: int, data: protocol.ProtocolBuffer) -> None:
         """Parse incoming packets"""
         try:
@@ -220,15 +223,23 @@ class ConnectionState:
         """Login Success (Packet ID: 0x02)"""
         uuid = protocol.read_string(data)
         username = protocol.read_string(data)
+        self.player = entity.Player(username=username, uuid=uuid)
 
     def parse_0x23(self, data: protocol.ProtocolBuffer) -> None:
         """Join Game (Packet ID: 0x23)"""
+        # Player.
         entity_id = protocol.read_int(data)
-        gamemode = protocol.read_ubyte(data)
-        dimension = protocol.read_int(data)
-        difficulty = protocol.read_ubyte(data)
-        max_players = protocol.read_ubyte(data)
-        level_type = protocol.read_string(data)
+        gamemode = enums.GameMode(protocol.read_ubyte(data)).name.lower()
+        dimension = enums.Dimension(protocol.read_int(data)).name.lower()
+
+        # Server.
+        self.server_difficulty = enums.Difficulty(protocol.read_ubyte(data)).name.lower()
+        self.server_max_players = protocol.read_ubyte(data)
+        self.server_world_type = protocol.read_string(data).lower()
+
+        # Update player state.
+        self.player.update_login_state(entity_id, gamemode, dimension)
+        self._dispatch('join')
 
     def parse_0x1a(self, data: protocol.ProtocolBuffer) -> None:
         """Disconnect (Packet ID: 0x1A)"""
@@ -245,7 +256,7 @@ class ConnectionState:
 
         _logger.debug(f"0x0f - Parsing: {chat} with position {position}")
         message = Message(chat)
-        message_types = {
+        message_types: Dict[int, str] = {
             0: 'chat_message',
             1: 'system_message',
             2: 'action_bar'
@@ -254,6 +265,25 @@ class ConnectionState:
             self._dispatch(message_types[position], message)
         else:
             _logger.warning(f"0x0f - Unknown chat position {position} with message: {message}")
+
+    async def send_client_status(self, action_id: Literal[0, 1]) -> None:
+        """
+        Send a Client Status packet to the server.
+
+        Parameters
+        ----------
+        action_id: Literal[0, 1]
+            The action to perform:
+            - 0: Perform respawn
+            - 1: Request statistics
+        """
+        await self.send_packet(0x03, protocol.write_varint(action_id))
+
+    async def get_statistics(self) -> Dict[str, int] :
+        if not self._has_waiters('0x07'):
+            await self.send_client_status(1)
+        result: Dict[str, int] = await self._wait_for('0x07')
+        return result
 
     def parse_0x20(self, data: protocol.ProtocolBuffer) -> None:
         """Handles Chunk Data (Packet ID: 0x20)"""
@@ -269,16 +299,16 @@ class ConnectionState:
         chunk.load_chunk_column(ground_up_continuous, primary_bit_mask, chunk_data)
 
         for _ in range(num_block_entities):
-            block_entity = protocol.read_nbt(data)
-            entity_pos = math.Vector3D(block_entity.pop('x'), block_entity.pop('y'), block_entity.pop('z')).to_int()
-            entity_id = block_entity.pop('id')
+            e = protocol.read_nbt(data)
+            entity_pos = math.Vector3D(e.pop('x'), e.pop('y'), e.pop('z')).to_int()
+            entity_id = e.pop('id')
 
             chunk_cords, block_pos, section_y = self._get_position_components(entity_pos)
             section = chunk.get_section(section_y)
             if section is None:
                 section = ChunkSection(math.Vector2D(0, 0))
                 chunk.set_section(section_y, section)
-            section.set_entity(block_pos, BlockEntity(entity_id, nbt_data=block_entity))
+            section.set_entity(block_pos, BlockEntity(entity_id, nbt_data=e))
 
         if self._load_chunks:
             self.chunks[math.Vector2D(chunk_x, chunk_z)] = chunk
@@ -298,6 +328,17 @@ class ConnectionState:
             self.set_block_state(state)
 
         self._dispatch('block_change', state)
+
+    def parse_0x07(self, data: protocol.ProtocolBuffer) -> None:
+        """Statistics (Packet ID: 0x07)"""
+        count = protocol.read_varint(data)
+        stats = {}
+
+        for _ in range(count):
+            name = protocol.read_string(data)
+            value = protocol.read_varint(data)
+            stats[name] = value
+        self._trigger_event('0x07', stats)
 
     def parse_0x10(self, data: protocol.ProtocolBuffer) -> None:
         """Multi Block Change (Packet ID: 0x10)"""
@@ -337,20 +378,20 @@ class ConnectionState:
         # Read packet data
         _ = protocol.read_position(data)
         action_id = protocol.read_ubyte(data)
-        block_entity = protocol.read_nbt(data)
+        e = protocol.read_nbt(data)
 
-        pos = math.Vector3D(block_entity.pop('x'), block_entity.pop('y'), block_entity.pop('z') )
-        entity_id = block_entity.pop('id')
+        pos = math.Vector3D(e.pop('x'), e.pop('y'), e.pop('z') )
+        entity_id = e.pop('id')
 
-        entity = BlockEntity(entity_id, nbt_data=block_entity)
+        e = BlockEntity(entity_id, nbt_data=e)
 
         # Get or create block state
         if self._load_chunks:
-            self.set_block_entity(pos.to_int(), entity)
+            self.set_block_entity(pos.to_int(), e)
 
         # Determine action name
         try:
-            action_name = BlockEntityAction(action_id).name.lower()
+            action_name = enums.BlockEntityAction(action_id).name.lower()
         except ValueError:
             _logger.warning(f"0x09 - Unknown BlockEntityAction ID: {action_id}")
             action_name = str(action_id)
@@ -362,9 +403,9 @@ class ConnectionState:
         """Unload Chunk (Packet ID: 0x1D)"""
         chunk_x = protocol.read_int(data)
         chunk_z = protocol.read_int(data)
-        position = math.Vector2D(chunk_x, chunk_z)
+        pos = math.Vector2D(chunk_x, chunk_z)
 
         if self._load_chunks:
-            self.chunks.pop(position, None)
+            self.chunks.pop(pos, None)
 
-        self._dispatch('chunk_unload', position)
+        self._dispatch('chunk_unload', pos)

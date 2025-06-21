@@ -24,15 +24,16 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import TypeVar, Generic, Union, Tuple, Iterator
+from typing import TYPE_CHECKING
 import math
 
-T = TypeVar('T', int, float, default=float)
+if TYPE_CHECKING:
+    from typing import TypeVar, Union, Tuple, Iterator
+    T = TypeVar('T', int, float, default=float)
 
-__all__ = ['Vector3D', 'Vector2D', 'Rotation']
+__all__ = ('Vector3D', 'Vector2D', 'Rotation')
 
-
-class Vector3D(Generic[T]):
+class Vector3D[T]:
     """
     A generic 3D vector class supporting basic vector operations.
 
@@ -266,7 +267,7 @@ class Vector3D(Generic[T]):
         return (self - other).magnitude()
 
 
-class Vector2D(Generic[T]):
+class Vector2D[T]:
     """
     A generic 2D vector class supporting basic vector operations.
 
@@ -504,9 +505,9 @@ class Rotation:
 
     ----------
     pitch_angle: float
-        Pitch angle in degrees, normalized to (-180, 180]
+        Pitch angle in degrees, normalized to (-180, 180)
     yaw_angle: float
-        Yaw angle in degrees, normalized to (-180, 180]
+        Yaw angle in degrees, normalized to (-180, 180)
     """
 
     __slots__ = ('pitch_angle', 'yaw_angle')
@@ -518,7 +519,7 @@ class Rotation:
     @staticmethod
     def _normalize_angle(angle: float) -> float:
         """
-        Normalize angle to the range (-180, 180] degrees.
+        Normalize angle to the range (-180, 180) degrees.
 
         Parameters
         ----------

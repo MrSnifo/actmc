@@ -35,8 +35,8 @@ class MessageEvent:
     __slots__ = ('_action', '_value')
 
     def __init__(self, action: str, value: Union[str, Dict[str, Any]]) -> None:
-        self._action = action
-        self._value = value
+        self._action: str = action
+        self._value: Union[str, Dict[str, Any]] = value
 
     @property
     def action(self) -> str:
