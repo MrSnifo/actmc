@@ -29,9 +29,10 @@ from . import enums
 from . import protocol
 import asyncio
 from .ui.chat import Message
-from .chunk import Chunk, BlockState, ChunkSection, BlockEntity
+from .chunk import Chunk, Block, ChunkSection
 from . import entity
 from . import math
+from .entities import block
 
 if TYPE_CHECKING:
     from typing import Optional, Dict, Callable, Any, Tuple, Literal, List
@@ -149,7 +150,7 @@ class ConnectionState:
         section_y, rel_y = y // 16, y % 16
         return math.Vector2D(chunk_x, chunk_z), math.Vector3D(rel_x, rel_y, rel_z), section_y
 
-    def get_block_state(self, position: math.Vector3D[int]) -> Optional[BlockState]:
+    def get_block_state(self, position: math.Vector3D[int]) -> Optional[Block]:
         if not self._load_chunks:
             raise RuntimeError("Chunk loading is disabled.")
 
@@ -163,7 +164,7 @@ class ConnectionState:
             return None
         return section.get_state(block_pos)
 
-    def set_block_state(self, state: BlockState) -> None:
+    def set_block_state(self, state: Block) -> None:
         if not self._load_chunks:
             raise RuntimeError("Chunk loading is disabled.")
 
@@ -178,11 +179,41 @@ class ConnectionState:
             chunk.set_section(section_y, section)
         section.set_state(block_pos, state)
 
-    def set_block_entity(self, position: math.Vector3D[int], entity: BlockEntity) -> None:
+    @staticmethod
+    def _create_block_entity(entity_id: str, nbt_data: Any) -> block.BlockEntity:
+        if entity_id == 'minecraft:bed':
+            block_entity = block.Bed(entity_id, nbt_data)
+        elif entity_id == 'minecraft:flower_pot':
+            block_entity = block.FlowerPot(entity_id, nbt_data)
+        elif entity_id == 'minecraft:banner':
+            block_entity = block.Banner(entity_id, nbt_data)
+        elif entity_id == 'minecraft:beacon':
+            block_entity = block.Beacon(entity_id, nbt_data)
+        elif entity_id == 'minecraft:sign':
+            block_entity = block.Sign(entity_id, nbt_data)
+        elif entity_id == 'minecraft:mob_spawner':
+            block_entity = block.MobSpawner(entity_id, nbt_data)
+        elif entity_id == 'minecraft:skull':
+            block_entity = block.Skull(entity_id, nbt_data)
+        elif entity_id == 'minecraft:structure_block':
+            block_entity = block.StructureBlock(entity_id, nbt_data)
+        elif entity_id == 'minecraft:end_gateway':
+            block_entity = block.EndGateway(entity_id, nbt_data)
+        elif entity_id == 'minecraft:shulker_box':
+            block_entity = block.ShulkerBox(entity_id)
+        else:
+            block_entity = block.BlockEntity(entity_id)
+            if len(nbt_data) > 0:
+                if len(nbt_data) > 0:
+                    _logger.warning("Unknown block entity id '%s' with NBT data: %s", entity_id, nbt_data)
+        return block_entity
+
+
+    def set_block_entity(self, pos: math.Vector3D[int], block_entity: block.BlockEntity) -> None:
         if not self._load_chunks:
             raise RuntimeError("Chunk loading is disabled.")
 
-        chunk_cords, block_pos, section_y = self._get_position_components(position)
+        chunk_cords, block_pos, section_y = self._get_position_components(pos)
         chunk = self.chunks.get(chunk_cords)
         if chunk is None:
             return
@@ -191,7 +222,8 @@ class ConnectionState:
         if section is None:
             section = ChunkSection(math.Vector2D(0, 0))
             chunk.set_section(section_y, section)
-        section.set_entity(block_pos, entity)
+
+        section.set_entity(block_pos, block_entity)
 
     # -------------------------------------------------------------------------------
     # --------------------------------------+ Parser +--------------------------------------
@@ -204,52 +236,53 @@ class ConnectionState:
 
 
     # --------------------------------------+ Parser +--------------------------------------
-    def parse(self, packet_id: int, data: protocol.ProtocolBuffer) -> None:
+    def parse(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
         """Parse incoming packets"""
         try:
             parser_name = self._packet_parsers.get(packet_id)
             if parser_name:
                 func = getattr(self, parser_name)
-                func(data)
+                func(buffer)
 
         except Exception as error:
             _logger.exception(f'Failed to parse packet 0x{packet_id:02X}: %s', error)
             self._dispatch('error', packet_id, error)
 
-    def parse_0x02(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x02(self, buffer: protocol.ProtocolBuffer) -> None:
+        # todo: other stuff (playmode go to gametwaty)
         """Login Success (Packet ID: 0x02)"""
-        uuid = protocol.read_string(data)
-        username = protocol.read_string(data)
+        uuid = protocol.read_string(buffer)
+        username = protocol.read_string(buffer)
         self.player = entity.Player(username=username, uuid=uuid)
 
-    def parse_0x23(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x23(self, buffer: protocol.ProtocolBuffer) -> None:
         """Join Game (Packet ID: 0x23)"""
         # Player.
-        entity_id = protocol.read_int(data)
-        gamemode = enums.GameMode(protocol.read_ubyte(data)).name.lower()
-        dimension = enums.Dimension(protocol.read_int(data)).name.lower()
+        entity_id = protocol.read_int(buffer)
+        gamemode = enums.GameMode(protocol.read_ubyte(buffer)).name.lower()
+        dimension = enums.Dimension(protocol.read_int(buffer)).name.lower()
 
         # Server.
-        self.server_difficulty = enums.Difficulty(protocol.read_ubyte(data)).name.lower()
-        self.server_max_players = protocol.read_ubyte(data)
-        self.server_world_type = protocol.read_string(data).lower()
+        self.server_difficulty = enums.Difficulty(protocol.read_ubyte(buffer)).name.lower()
+        self.server_max_players = protocol.read_ubyte(buffer)
+        self.server_world_type = protocol.read_string(buffer).lower()
 
         # Update player state.
         self.player.update_login_state(entity_id, gamemode, dimension)
         self._dispatch('join')
 
-    def parse_0x1a(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x1a(self, buffer: protocol.ProtocolBuffer) -> None:
         """Disconnect (Packet ID: 0x1A)"""
-        reason = protocol.read_chat(data)
+        reason = protocol.read_chat(buffer)
 
         _logger.debug(f"0x1a - Parsing: {reason}")
         message = Message(reason)
         self._dispatch('disconnect', message)
 
-    def parse_0x0f(self, data) -> None:
+    def parse_0x0f(self, buffer) -> None:
         """Handles Chat Message (Packet ID: 0x0F)"""
-        chat = protocol.read_chat(data)
-        position = protocol.read_ubyte(data)
+        chat = protocol.read_chat(buffer)
+        position = protocol.read_ubyte(buffer)
 
         _logger.debug(f"0x0f - Parsing: {chat} with position {position}")
         message = Message(chat)
@@ -282,73 +315,79 @@ class ConnectionState:
         result: Dict[str, int] = await self._wait_for('0x07')
         return result
 
-    def parse_0x20(self, data: protocol.ProtocolBuffer) -> None:
-        """Handles Chunk Data (Packet ID: 0x20)"""
-        chunk_x = protocol.read_int(data)
-        chunk_z = protocol.read_int(data)
-        ground_up_continuous = protocol.read_bool(data)
-        primary_bit_mask = protocol.read_varint(data)
-        size = protocol.read_varint(data)
-        chunk_data = protocol.read_byte_array(data, size)
-        num_block_entities = protocol.read_varint(data)
+    def parse_0x20(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Handles Chunk buffer (Packet ID: 0x20)"""
+        chunk_x = protocol.read_int(buffer)
+        chunk_z = protocol.read_int(buffer)
+        ground_up_continuous = protocol.read_bool(buffer)
+        primary_bit_mask = protocol.read_varint(buffer)
+        size = protocol.read_varint(buffer)
+        chunk_buffer = protocol.read_byte_array(buffer, size)
+        num_block_entities = protocol.read_varint(buffer)
 
         chunk = Chunk(math.Vector2D(chunk_x, chunk_z))
-        chunk.load_chunk_column(ground_up_continuous, primary_bit_mask, chunk_data)
+        chunk.load_chunk_column(ground_up_continuous, primary_bit_mask, chunk_buffer)
 
         for _ in range(num_block_entities):
-            e = protocol.read_nbt(data)
-            entity_pos = math.Vector3D(e.pop('x'), e.pop('y'), e.pop('z')).to_int()
-            entity_id = e.pop('id')
+            data = protocol.read_nbt(buffer)
+            entity_pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z')).to_int()
+            entity_id = data.pop('id')
 
             chunk_cords, block_pos, section_y = self._get_position_components(entity_pos)
             section = chunk.get_section(section_y)
             if section is None:
                 section = ChunkSection(math.Vector2D(0, 0))
                 chunk.set_section(section_y, section)
-            section.set_entity(block_pos, BlockEntity(entity_id, nbt_data=e))
+
+            block_entity = self._create_block_entity(entity_id, data)
+            section.set_entity(block_pos, block_entity)
 
         if self._load_chunks:
             self.chunks[math.Vector2D(chunk_x, chunk_z)] = chunk
 
+        s = chunk.get_block_entities()
+        if len(s) >= 1:
+            print([b.entity for b in s])
+
         self._dispatch('chunk_load', chunk)
 
-    def parse_0x0b(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x0b(self, buffer: protocol.ProtocolBuffer) -> None:
         """Block Change (Packet ID: 0x0B)"""
-        position = protocol.read_position(data)
-        block_state_id = protocol.read_varint(data)
+        position = protocol.read_position(buffer)
+        block_state_id = protocol.read_varint(buffer)
         block_type = block_state_id >> 4
         block_meta = block_state_id & 0xF
 
-        state = BlockState(block_type, block_meta, math.Vector3D(*position).to_int())
+        state = Block(block_type, block_meta, math.Vector3D(*position).to_int())
 
         if self._load_chunks:
             self.set_block_state(state)
 
         self._dispatch('block_change', state)
 
-    def parse_0x07(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x07(self, buffer: protocol.ProtocolBuffer) -> None:
         """Statistics (Packet ID: 0x07)"""
-        count = protocol.read_varint(data)
+        count = protocol.read_varint(buffer)
         stats = {}
 
         for _ in range(count):
-            name = protocol.read_string(data)
-            value = protocol.read_varint(data)
+            name = protocol.read_string(buffer)
+            value = protocol.read_varint(buffer)
             stats[name] = value
         self._trigger_event('0x07', stats)
 
-    def parse_0x10(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x10(self, buffer: protocol.ProtocolBuffer) -> None:
         """Multi Block Change (Packet ID: 0x10)"""
-        chunk_x = protocol.read_int(data)
-        chunk_z = protocol.read_int(data)
-        record_count = protocol.read_varint(data)
+        chunk_x = protocol.read_int(buffer)
+        chunk_z = protocol.read_int(buffer)
+        record_count = protocol.read_varint(buffer)
 
         states = []
 
         for _ in range(record_count):
-            horizontal = protocol.read_ubyte(data)
-            y = protocol.read_ubyte(data)
-            block_state_id = protocol.read_varint(data)
+            horizontal = protocol.read_ubyte(buffer)
+            y = protocol.read_ubyte(buffer)
+            block_state_id = protocol.read_varint(buffer)
 
             # Extract relative coordinates in the chunk (0-15)
             rel_x = (horizontal >> 4) & 0x0F
@@ -361,7 +400,7 @@ class ConnectionState:
             block_type = block_state_id >> 4
             block_meta = block_state_id & 0xF
 
-            state = BlockState(block_type, block_meta, math.Vector3D(x, y, z).to_int())
+            state = Block(block_type, block_meta, math.Vector3D(x, y, z).to_int())
 
             if self._load_chunks:
                  self.set_block_state(state)
@@ -370,21 +409,22 @@ class ConnectionState:
 
         self._dispatch('multi_block_change', states)
 
-    def parse_0x09(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x09(self, buffer: protocol.ProtocolBuffer) -> None:
         """Update Block Entity (Packet ID: 0x09)"""
-        # Read packet data
-        _ = protocol.read_position(data)
-        action_id = protocol.read_ubyte(data)
-        e = protocol.read_nbt(data)
+        # Read packet buffer
+        _ = protocol.read_position(buffer)
+        action_id = protocol.read_ubyte(buffer)
+        data = protocol.read_nbt(buffer)
 
-        pos = math.Vector3D(e.pop('x'), e.pop('y'), e.pop('z') )
-        entity_id = e.pop('id')
 
-        e = BlockEntity(entity_id, nbt_data=e)
+        pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z') )
+        entity_id = data.pop('id')
+
+        block_entity = self._create_block_entity(entity_id, data)
 
         # Get or create block state
         if self._load_chunks:
-            self.set_block_entity(pos.to_int(), e)
+            self.set_block_entity(pos.to_int(), block_entity)
 
         # Determine action name
         try:
@@ -394,15 +434,19 @@ class ConnectionState:
             action_name = str(action_id)
 
         # Dispatch the event
-        self._dispatch('block_entity_update', action_name, pos, entity)
+        self._dispatch('block_entity_update', action_name, pos, block_entity)
 
-    def parse_0x1d(self, data: protocol.ProtocolBuffer) -> None:
+    def parse_0x1d(self, buffer: protocol.ProtocolBuffer) -> None:
         """Unload Chunk (Packet ID: 0x1D)"""
-        chunk_x = protocol.read_int(data)
-        chunk_z = protocol.read_int(data)
+        chunk_x = protocol.read_int(buffer)
+        chunk_z = protocol.read_int(buffer)
         pos = math.Vector2D(chunk_x, chunk_z)
 
         if self._load_chunks:
             self.chunks.pop(pos, None)
 
         self._dispatch('chunk_unload', pos)
+
+    def parse_0x15(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Unload Chunk (Packet ID: 0x1D)"""
+        print('wtf')

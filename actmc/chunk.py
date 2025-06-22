@@ -27,6 +27,7 @@ from __future__ import annotations
 from .protocol import ProtocolBuffer, read_varint
 from .math import Vector3D, Vector2D
 from typing import TYPE_CHECKING
+from .entities import block
 import struct
 import array
 import math
@@ -35,49 +36,7 @@ if TYPE_CHECKING:
     from typing import List, Dict, Union, ClassVar, Any, Optional
 
 
-class BlockEntity:
-    """
-    Represents a block entity with NBT data.
-
-    Parameters
-    ----------
-    entity_id: str
-        The entity identifier.
-    nbt_data: Dict[str, Any]
-        The NBT data associated with the entity.
-
-    Attributes
-    ----------
-    id: str
-        The entity identifier.
-    data: Dict[str, Any]
-        The NBT data associated with the entity.
-    """
-    __slots__ = ('id', 'data')
-
-    def __init__(self, entity_id: str, nbt_data: Dict[str, Any]) -> None:
-        self.id: str = entity_id
-        self.data: Dict[str, Any] = nbt_data
-
-    def has_nbt_data(self) -> bool:
-        """
-        Check if this block entity has NBT data.
-
-        Returns
-        -------
-        bool
-            True if NBT data is present and not empty.
-        """
-        return len(self.data) > 0
-
-    def __eq__(self, other: BlockEntity) -> bool:
-        return self.id == other.id and self.data == other.data
-
-    def __repr__(self) -> str:
-        return f"<BlockEntity id={self.id}, has_nbt={self.has_nbt_data()}>"
-
-
-class BlockState:
+class Block:
     """
     Represents the state of a block in the world, including its type, metadata, position, and associated entity.
 
@@ -108,7 +67,7 @@ class BlockState:
     def __init__(self, block_id: int, metadata: int = 0, position: Vector3D[int] = None) -> None:
         self.id = block_id
         self.metadata = metadata
-        self.entity: Optional[BlockEntity] = None
+        self.entity: Optional[block.BlockEntity] = None
         self.position = position
 
     def is_valid(self) -> bool:
@@ -123,7 +82,7 @@ class BlockState:
         return 0 <= self.id <= 255 and 0 <= self.metadata <= 15
 
     def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, BlockState):
+        if not isinstance(other, Block):
             return False
         return (self.id == other.id and
                 self.metadata == other.metadata and
@@ -155,9 +114,9 @@ class IndirectPalette:
     ----------
     bits_per_block: int
         Number of bits used to represent each block (minimum 4).
-    id_to_state: Dict[int, BlockState]
+    id_to_state: Dict[int, Block]
         Mapping from palette IDs to block states.
-    state_to_id: Dict[BlockState, int]
+    state_to_id: Dict[Block, int]
         Mapping from block states to palette IDs.
     """
 
@@ -166,16 +125,16 @@ class IndirectPalette:
     def __init__(self, bits_per_block: int) -> None:
         # Minimum 4 bits
         self.bits_per_block: int = max(4, bits_per_block)
-        self.id_to_state: Dict[int, BlockState] = {}
-        self.state_to_id: Dict[BlockState, int] = {}
+        self.id_to_state: Dict[int, Block] = {}
+        self.state_to_id: Dict[Block, int] = {}
 
-    def add_state(self, state: BlockState) -> int:
+    def add_state(self, state: Block) -> int:
         """
         Add a state to the palette and return its ID.
 
         Parameters
         ----------
-        state: BlockState
+        state: Block
             The block state to add.
 
         Returns
@@ -191,13 +150,13 @@ class IndirectPalette:
         self.state_to_id[state] = palette_id
         return palette_id
 
-    def id_for_state(self, state: BlockState) -> int:
+    def id_for_state(self, state: Block) -> int:
         """
         Get the palette ID for a given block state.
 
         Parameters
         ----------
-        state: BlockState
+        state: Block
             The block state to look up.
 
         Returns
@@ -209,7 +168,7 @@ class IndirectPalette:
             return self.add_state(state)
         return self.state_to_id[state]
 
-    def state_for_id(self, palette_id: int) -> BlockState:
+    def state_for_id(self, palette_id: int) -> Block:
         """
         Get the block state for a given palette ID.
 
@@ -220,10 +179,10 @@ class IndirectPalette:
 
         Returns
         -------
-        BlockState
+        Block
             The corresponding block state (air if invalid).
         """
-        return self.id_to_state.get(palette_id, BlockState(0, 0))  # Default to air
+        return self.id_to_state.get(palette_id, Block(0, 0))  # Default to air
 
     def get_bits_per_block(self) -> int:
         """
@@ -256,12 +215,12 @@ class IndirectPalette:
             self.state_to_id[state] = palette_id
 
     @staticmethod
-    def _get_state_from_global_palette_id(palette_id: int) -> BlockState:
+    def _get_state_from_global_palette_id(palette_id: int) -> Block:
         """Convert global palette ID to block state."""
         block_id = palette_id >> 4
         metadata = palette_id & 0x0F
-        state = BlockState(block_id, metadata)
-        return state if state.is_valid() else BlockState(0, 0)
+        state = Block(block_id, metadata)
+        return state if state.is_valid() else Block(0, 0)
 
     def __repr__(self) -> str:
         return f"<IndirectPalette bits={self.bits_per_block}, size={len(self.id_to_state)}>"
@@ -283,13 +242,13 @@ class DirectPalette:
         # Current vanilla value
         self.bits_per_block: int = 13
 
-    def id_for_state(self, state: BlockState) -> int:
+    def id_for_state(self, state: Block) -> int:
         """
         Get the global palette ID for a given block state.
 
         Parameters
         ----------
-        state: BlockState
+        state: Block
             The block state to convert.
 
         Returns
@@ -299,7 +258,7 @@ class DirectPalette:
         """
         return self._get_global_palette_id_from_state(state)
 
-    def state_for_id(self, palette_id: int) -> BlockState:
+    def state_for_id(self, palette_id: int) -> Block:
         """
         Get the block state for a given global palette ID.
 
@@ -310,7 +269,7 @@ class DirectPalette:
 
         Returns
         -------
-        BlockState
+        Block
             The corresponding block state.
         """
         return self._get_state_from_global_palette_id(palette_id)
@@ -346,19 +305,19 @@ class DirectPalette:
         assert dummy_length == 0, f"Expected dummy palette length of 0, got {dummy_length}"
 
     @staticmethod
-    def _get_global_palette_id_from_state(state: BlockState) -> int:
+    def _get_global_palette_id_from_state(state: Block) -> int:
         """Convert block state to global palette ID."""
         if state.is_valid():
             return (state.id << 4) | state.metadata
         return 0
 
     @staticmethod
-    def _get_state_from_global_palette_id(palette_id: int) -> BlockState:
+    def _get_state_from_global_palette_id(palette_id: int) -> Block:
         """Convert global palette ID to block state."""
         block_id = palette_id >> 4
         metadata = palette_id & 0x0F
-        state = BlockState(block_id, metadata)
-        return state if state.is_valid() else BlockState(0, 0)
+        state = Block(block_id, metadata)
+        return state if state.is_valid() else Block(0, 0)
 
     def __repr__(self) -> str:
         return f"<DirectPalette bits={self.bits_per_block}>"
@@ -394,7 +353,7 @@ class ChunkSection:
     """
 
     __slots__ = ('chunk_pos', 'section_y', 'block_ids', 'block_metadata', 'block_light', 'sky_light', 'palette',
-                 '_block_entities')
+                 'block_entities')
 
     SECTION_WIDTH: ClassVar[int] = 16
     SECTION_HEIGHT: ClassVar[int] = 16
@@ -411,14 +370,14 @@ class ChunkSection:
         self.sky_light = array.array('B', [0] * self.BLOCKS_PER_SECTION)
 
         self.palette: Optional[Union[IndirectPalette, DirectPalette]] = None
-        self._block_entities: Dict[int, BlockEntity] = {}
+        self.block_entities: Dict[int, block.BlockEntity] = {}
 
     @staticmethod
     def _get_index(x: int, y: int, z: int) -> int:
         """Convert 3D coordinates to flat array index."""
         return (y << 8) | (z << 4) | x  # y*256 + z*16 + x
 
-    def get_state(self, pos: Vector3D[int]) -> BlockState:
+    def get_state(self, pos: Vector3D[int]) -> Block:
         """
         Get block state at coordinates.
 
@@ -429,7 +388,7 @@ class ChunkSection:
 
         Returns
         -------
-        BlockState
+        Block
             The block state at the given coordinates.
         """
         idx = self._get_index(pos.x, pos.y, pos.z)
@@ -437,15 +396,15 @@ class ChunkSection:
         world_y = self.section_y * self.SECTION_HEIGHT + pos.y
         world_z = self.chunk_pos.y * self.SECTION_WIDTH + pos.z
 
-        state = BlockState(self.block_ids[idx], self.block_metadata[idx], Vector3D(world_x, world_y, world_z))
+        state = Block(self.block_ids[idx], self.block_metadata[idx], Vector3D(world_x, world_y, world_z))
 
         # Check for block entity
-        if idx in self._block_entities:
-            state.entity = self._block_entities[idx]
+        if idx in self.block_entities:
+            state.entity = self.block_entities[idx]
 
         return state
 
-    def set_state(self, pos: Vector3D[int], state: BlockState) -> None:
+    def set_state(self, pos: Vector3D[int], state: Block) -> None:
         """
         Set block state at coordinates.
 
@@ -453,29 +412,19 @@ class ChunkSection:
         ----------
         pos: Vector3D[int]
             The position coordinates within the section.
-        state: BlockState
+        state: Block
             The block state to set.
         """
         idx = self._get_index(pos.x, pos.y, pos.z)
         self.block_ids[idx] = state.id
         self.block_metadata[idx] = state.metadata
 
-        if idx in self._block_entities:
-            del self._block_entities[idx]
+        if idx in self.block_entities:
+            del self.block_entities[idx]
 
-    def set_entity(self, pos: Vector3D[int], entity: BlockEntity) -> None:
-        """
-        Set block entity at coordinates.
-
-        Parameters
-        ----------
-        pos: Vector3D[int]
-            The position coordinates within the section.
-        entity: BlockEntity
-            The block entity to set.
-        """
+    def set_entity(self, pos: Vector3D[int], block_entity: block.BlockEntity) -> None:
         idx = self._get_index(pos.x, pos.y, pos.z)
-        self._block_entities[idx] = entity
+        self.block_entities[idx] = block_entity
 
     def get_block_light(self, x: int, y: int, z: int) -> int:
         """
@@ -598,7 +547,7 @@ class ChunkSection:
             world_y = world_y_base + y
             world_z = chunk_z + z
 
-            state = BlockState(self.block_ids[i], self.block_metadata[i], Vector3D(world_x, world_y, world_z))
+            state = Block(self.block_ids[i], self.block_metadata[i], Vector3D(world_x, world_y, world_z))
             unique_states.add(state)
 
         bits_needed = max(4, math.ceil(math.log2(len(unique_states)))) if len(unique_states) > 1 else 4
@@ -662,6 +611,30 @@ class Chunk:
         if 0 <= section_y < self.SECTIONS_PER_CHUNK:
             return self.sections[section_y]
         return None
+
+    def get_block_entities(self) -> List[Block]:
+        """
+        Get all block states that have block entities in this chunk.
+
+        Returns
+        -------
+        List[Block]
+            A list of block states with their associated block entities and world positions.
+        """
+        block_states_with_entities = []
+
+        for section_y, section in enumerate(self.sections):
+            if section is not None:
+                for idx, entity in section.block_entities.items():
+                    y = idx >> 8
+                    z = (idx >> 4) & 0xF
+                    x = idx & 0xF
+
+                    local_pos = Vector3D(x, y, z)
+                    block_state = section.get_state(local_pos)
+                    block_states_with_entities.append(block_state)
+
+        return block_states_with_entities
 
     def set_section(self, section_y: int, section: ChunkSection) -> None:
         """

@@ -8,7 +8,7 @@ from .tcp import TcpClient
 
 
 if TYPE_CHECKING:
-    from .chunk import Chunk, BlockState, BlockEntity
+    from .chunk import Chunk, Block, BlockEntity
     from .math import Vector2D, Vector3D
     from .entity import Player
 from .state import ConnectionState
@@ -55,10 +55,10 @@ class Client:
     def chunks(self) -> Dict[Vector2D[int], Chunk]:
         return self._connection.chunks
 
-    def get_block(self, pos: Vector3D[int]) -> Optional[BlockState]:
+    def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
         return self._connection.get_block_state(pos)
 
-    def set_block_state(self, block: BlockState) -> None:
+    def set_block_state(self, block: Block) -> None:
         self._connection.set_block_state(block)
 
     def set_block_entity(self, pos: Vector3D[int], entity: BlockEntity) -> None:

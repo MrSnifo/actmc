@@ -25,6 +25,7 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import json
 import re
 
 if TYPE_CHECKING:
@@ -118,9 +119,11 @@ class Message:
         '#ff5555': '§c', '#ff55ff': '§d', '#ffff55': '§e', '#ffffff': '§f'
     }
 
-    __slots__ = ('_components', '_current_style')
+    __slots__ = ('_components', '_current_style', 'to_json')
 
-    def __init__(self, data: Union[str, Dict[str, Any], List[Any]]) -> None:
+    def __init__(self, data: Union[str, Dict[str, Any], List[Any]], to_json: bool = False) -> None:
+        if to_json:
+            data: Dict[str, Any] = json.loads(data)
         self._components: List[Dict[str, Any]] = []
         self._current_style: Dict[str, Any] = {}
         self._parse(data)
