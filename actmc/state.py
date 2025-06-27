@@ -412,6 +412,56 @@ class ConnectionState:
         result: Dict[str, int] = await self._wait_for('0x07')
         return result
 
+    async def send_player_packet(self, on_ground: bool) -> None:
+        """Send Player packet (0x0C) - indicates if player is on ground"""
+        data = protocol.pack_bool(on_ground)
+        await self.send_packet(0x0C, data)
+
+    async def send_player_position(self, position: math.Vector3D[float], on_ground: bool) -> None:
+        """Send Player Position packet (0x0D) - updates XYZ position"""
+        data = (protocol.pack_double(position.x) +
+                protocol.pack_double(position.y) +
+                protocol.pack_double(position.z) +
+                protocol.pack_bool(on_ground))
+        await self.send_packet(0x0D, data)
+
+    async def send_player_look(self, rotation: math.Rotation, on_ground: bool) -> None:
+        """Send Player Look packet (0x0F) - updates rotation"""
+        data = (protocol.pack_float(rotation.yaw) +
+                protocol.pack_float(rotation.pitch) +
+                protocol.pack_bool(on_ground))
+        await self.send_packet(0x0F, data)
+
+    async def send_entity_action(self, entity_id: int, action_id: int, jump_boost: int = 0) -> None:
+        """Send Entity Action packet (0x15) - notifies server of player actions
+
+        Parameters
+        ----------
+        entity_id : int
+            The ID of the entity performing the action.
+        action_id : int
+            The ID of the action being performed.
+        jump_boost : int, optional
+            Used only for 'start jump with horse' action (action_id == 5).
+        """
+        data = (
+                protocol.write_varint(entity_id) +
+                protocol.write_varint(action_id) +
+                protocol.write_varint(jump_boost)
+        )
+        await self.send_packet(0x15, data)
+
+    async def send_player_position_and_look(self, position: math.Vector3D[float], rotation: math.Rotation,
+                                      on_ground: bool) -> None:
+        """Send Player Position And Look packet (0x0E) - combines position and rotation"""
+        data = (protocol.pack_double(position.x) +
+                protocol.pack_double(position.y) +
+                protocol.pack_double(position.z) +
+                protocol.pack_float(rotation.yaw) +
+                protocol.pack_float(rotation.pitch) +
+                protocol.pack_bool(on_ground))
+        await self.send_packet(0x0E, data)
+
     # ============================== Packet Parsers ==============================
 
     async def parse_0x23(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -569,10 +619,7 @@ class ConnectionState:
         pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z'))
         entity_id = data.pop('id')
 
-        # Create block entity
         block_entity = self._create_block_entity(entity_id, data)
-
-        # Update world state if chunk loading is enabled
         if self._load_chunks:
             self.set_block_entity(pos.to_int(), block_entity)
 
@@ -672,6 +719,49 @@ class ConnectionState:
         self.user.position = math.Vector3D(x, y, z)
         self.user.rotation = math.Rotation(yaw, pitch)
 
-        # Teleport Confirm
+        # Teleport Confirmation.
         await self.send_packet(0x00, protocol.write_varint(teleport_id))
         self._dispatch('player_position_and_look', self.user.position, self.user.rotation)
+
+    async def parse_0x46(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Spawn Position (Packet ID: 0x46)
+
+        Sent by the server to set the spawn location (where players respawn and compasses point to).
+        Can be sent at any time to update the compass target.
+        """
+        x, y, z = protocol.read_position(data)
+        self.user.spawn_point = math.Vector3D(x, y, z)
+
+        self._dispatch('spawn_position', self.user.spawn_point)
+
+    async def parse_0x35(self, data: protocol.ProtocolBuffer) -> None:
+        """
+        Respawn (Packet ID: 0x35)
+
+        Sent by the server to change the player's dimension.
+
+        Fields:
+            Dimension (Int): -1=Nether, 0=Overworld, 1=End
+            Difficulty (Unsigned Byte): 0=Peaceful, 1=Easy, 2=Normal, 3=Hard
+            Gamemode (Unsigned Byte): 0=Survival, 1=Creative, 2=Adventure, 3=Spectator
+            Level Type (String): World generation type, e.g. "default"
+
+        Notes:
+            Avoid respawning the player in the same dimension unless they are dead.
+            To force a respawn in the same dimension, send two respawn packets: one to a different dimension, then the desired one.
+        """
+        dimension = protocol.read_int(data)
+        difficulty = protocol.read_ubyte(data)
+        gamemode = protocol.read_ubyte(data)
+        level_type = protocol.read_string(data)
+
+        self.user.dimension = self.user.DIMENSION.get(dimension, 'overworld')
+        self.server_difficulty = difficulty
+        self.user.gamemode = self.user.GAMEMODE.get(gamemode, 'survival')
+        self.server_world_type = level_type
+
+        self._dispatch('respawn', dimension, difficulty, gamemode, level_type)
+
+
+
