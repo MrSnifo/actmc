@@ -19,8 +19,7 @@ class User(BaseEntity):
                  'health', 'food', 'food_saturation',
                  'level', 'total_experience', 'experience_bar',
                  'held_slot',
-                 'position', 'rotation', 'spawn_point',
-                 '_action_sneak', '_action_sprint')
+                 'position', 'rotation', 'spawn_point')
 
     GAMEMODE: ClassVar[Dict[int, Literal['survival', 'creative', 'adventure', 'spectator']]] = {
         0: 'survival',
@@ -65,9 +64,6 @@ class User(BaseEntity):
         super().__init__(entity_id)
         self._state: ConnectionState = state
         self._update(username, uuid)
-        # todo: dead = reset actions
-        self._action_sneak: bool = False
-        self._action_sprint: bool = False
 
 
     def _update(self, username: str, uuid: str) -> None:
@@ -117,10 +113,6 @@ class User(BaseEntity):
         state: bool
             True to start sneaking, False to stop sneaking. Default is True.
         """
-        if self._action_sneak == state:
-            return
-
-        self._action_sneak = state
         await self._state.send_entity_action(self.id, 0 if state else 1)
 
     async def sprint(self, state: bool = True) -> None:
@@ -132,11 +124,6 @@ class User(BaseEntity):
         state: bool
             True to start sprinting, False to stop sprinting. Default is True.
         """
-
-        if self._action_sprint == state:
-            return
-
-        self._action_sprint = state
         await self._state.send_entity_action(self.id, 3 if state else 4)
 
     @overload
