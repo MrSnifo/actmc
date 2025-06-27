@@ -1,4 +1,5 @@
-from typing import TypedDict, List, NotRequired, Dict, Any, Literal
+from typing import TypedDict, List, NotRequired, Dict, Any, Literal, Required
+
 
 class BannerPattern(TypedDict):
     """A single pattern layer with color on a banner."""
@@ -29,7 +30,7 @@ class Sign(TypedDict):
     Text4: str
 
 
-MobSpawnerEntityData = TypedDict('MobSpawnerEntityData', {'id': str}, total=False)
+MobSpawnerEntityData = TypedDict('MobSpawnerEntityData', {'id': Required[int]}, total=False)
 MobSpawnerSpawnPotentialEntry = TypedDict('MobSpawnerSpawnPotentialEntry', {'weight': int,
                                                                             'Entity': MobSpawnerEntityData})
 class MobSpawner(TypedDict):

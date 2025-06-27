@@ -124,6 +124,10 @@ def pack_string(value: str) -> bytes:
     encoded = value.encode('utf-8')
     return write_varint(len(encoded)) + encoded
 
+def read_angle(buffer: ProtocolBuffer) -> float:
+    """Read an angle from buffer (1 byte, scaled to 360 degrees)"""
+    angle_byte = read_ubyte(buffer)
+    return (angle_byte * 360) / 256.0
 
 def read_string(buffer: ProtocolBuffer, max_length: int = 32767) -> str:
     """Read a string from buffer with optional max length check"""

@@ -8,9 +8,9 @@ from .tcp import TcpClient
 
 
 if TYPE_CHECKING:
-    from .chunk import Chunk, Block, BlockEntity
+    from .chunk import Chunk, Block
     from .math import Vector2D, Vector3D
-    from .entity import Player
+    from .user import User
 from .state import ConnectionState
 
 import logging
@@ -28,8 +28,8 @@ class Client:
 
     # -------------------+ Player +-------------------
     @property
-    def player(self) -> Optional[Player]:
-        return self._connection.player
+    def user(self) -> Optional[User]:
+        return self._connection.user
 
     async def perform_respawn(self) -> None:
         """
@@ -58,14 +58,7 @@ class Client:
     def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
         return self._connection.get_block_state(pos)
 
-    def set_block_state(self, block: Block) -> None:
-        self._connection.set_block_state(block)
-
-    def set_block_entity(self, pos: Vector3D[int], entity: BlockEntity) -> None:
-        self._connection.set_block_entity(pos, entity)
-
     # -----------------------------------------------
-
     def _get_socket(self) -> MinecraftSocket:
         return self.socket
 
@@ -179,6 +172,8 @@ class Client:
             root_logger: bool = False) -> None:
         if log_handler is None:
             setup_logging(handler=log_handler, level=log_level, root=root_logger)
+
+        # https://account.mojang.com/documents/minecraft_eula README
 
         async def runner() -> None:
             await self.start(username)

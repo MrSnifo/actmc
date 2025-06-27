@@ -27,13 +27,16 @@ from __future__ import annotations
 from .protocol import ProtocolBuffer, read_varint
 from .math import Vector3D, Vector2D
 from typing import TYPE_CHECKING
-from .entities import block
+from .entities import entity
 import struct
 import array
 import math
 
 if TYPE_CHECKING:
     from typing import List, Dict, Union, ClassVar, Any, Optional
+
+
+__all__ = ('Block', 'ChunkSection', 'Chunk', 'IndirectPalette', 'DirectPalette')
 
 
 class Block:
@@ -67,7 +70,7 @@ class Block:
     def __init__(self, block_id: int, metadata: int = 0, position: Vector3D[int] = None) -> None:
         self.id = block_id
         self.metadata = metadata
-        self.entity: Optional[block.BlockEntity] = None
+        self.entity: Optional[entity.BaseEntity] = None
         self.position = position
 
     def is_valid(self) -> bool:
@@ -370,7 +373,7 @@ class ChunkSection:
         self.sky_light = array.array('B', [0] * self.BLOCKS_PER_SECTION)
 
         self.palette: Optional[Union[IndirectPalette, DirectPalette]] = None
-        self.block_entities: Dict[int, block.BlockEntity] = {}
+        self.block_entities: Dict[int, entity.BaseEntity] = {}
 
     @staticmethod
     def _get_index(x: int, y: int, z: int) -> int:
@@ -422,7 +425,7 @@ class ChunkSection:
         if idx in self.block_entities:
             del self.block_entities[idx]
 
-    def set_entity(self, pos: Vector3D[int], block_entity: block.BlockEntity) -> None:
+    def set_entity(self, pos: Vector3D[int], block_entity: entity.BaseEntity) -> None:
         idx = self._get_index(pos.x, pos.y, pos.z)
         self.block_entities[idx] = block_entity
 

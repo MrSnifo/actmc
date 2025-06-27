@@ -29,7 +29,7 @@ import math
 
 if TYPE_CHECKING:
     from typing import TypeVar, Union, Tuple, Iterator
-    T = TypeVar('T', int, float, default=float)
+    T = TypeVar('T', int, float, default=Union[int, float])
 
 __all__ = ('Vector3D', 'Vector2D', 'Rotation')
 
@@ -90,7 +90,8 @@ class Vector3D[T]:
         str
             String representation
         """
-        return f"<Vector3D x={self.x}, y={self.y}, z={self.z}>"
+        fmt = lambda n: str(int(n)) if n == int(n) else f"{n:.2f}"
+        return f"<Vector3D x={fmt(self.x)}, y={fmt(self.y)}, z={fmt(self.z)}>"
 
     def __add__(self, other: Vector3D[T]) -> Vector3D[T]:
         """
@@ -321,7 +322,8 @@ class Vector2D[T]:
         str
             String representation
         """
-        return f"<Vector2D x={self.x}, y={self.y}>"
+        fmt = lambda n: str(int(n)) if n == int(n) else f"{n:.2f}"
+        return f"<Vector2D x={fmt(self.x)}, y={fmt(self.y)}>"
 
     def __add__(self, other: Vector2D[T]) -> Vector2D[T]:
         """
@@ -504,17 +506,17 @@ class Rotation:
     Angles are normalized to the range [-180, 180] degrees.
 
     ----------
-    pitch_angle: float
+    pitch: float
         Pitch angle in degrees, normalized to (-180, 180)
-    yaw_angle: float
+    yaw: float
         Yaw angle in degrees, normalized to (-180, 180)
     """
 
-    __slots__ = ('pitch_angle', 'yaw_angle')
+    __slots__ = ('pitch', 'yaw')
 
-    def __init__(self, pitch_angle: float, yaw_angle: float) -> None:
-        self.pitch_angle = self._normalize_angle(float(pitch_angle))
-        self.yaw_angle = self._normalize_angle(float(yaw_angle))
+    def __init__(self, pitch: float, yaw: float) -> None:
+        self.pitch = self._normalize_angle(float(pitch))
+        self.yaw = self._normalize_angle(float(yaw))
 
     @staticmethod
     def _normalize_angle(angle: float) -> float:
@@ -546,7 +548,7 @@ class Rotation:
         Tuple[float, float]
             Tuple of (pitch_radians, yaw_radians)
         """
-        return math.radians(self.pitch_angle), math.radians(self.yaw_angle)
+        return math.radians(self.pitch), math.radians(self.yaw)
 
     def to_degrees(self) -> Tuple[float, float]:
         """
@@ -557,7 +559,7 @@ class Rotation:
         Tuple[float, float]
             Tuple of (pitch_degrees, yaw_degrees)
         """
-        return self.pitch_angle, self.yaw_angle
+        return self.pitch, self.yaw
 
     @classmethod
     def from_radians(cls, pitch_radians: float, yaw_radians: float) -> Rotation:
@@ -592,8 +594,7 @@ class Rotation:
         Rotation
             Sum of the two rotations
         """
-        return Rotation(self.pitch_angle + other.pitch_angle,
-                        self.yaw_angle + other.yaw_angle)
+        return Rotation(self.pitch + other.pitch, self.yaw + other.yaw)
 
     def __sub__(self, other: Rotation) -> Rotation:
         """
@@ -609,8 +610,8 @@ class Rotation:
         Rotation
             Difference of the two rotations
         """
-        return Rotation(self.pitch_angle - other.pitch_angle,
-                        self.yaw_angle - other.yaw_angle)
+        return Rotation(self.pitch - other.pitch,
+                        self.yaw - other.yaw)
 
     def __mul__(self, scalar: Union[int, float]) -> Rotation:
         """
@@ -626,7 +627,7 @@ class Rotation:
         Rotation
             Scaled rotation
         """
-        return Rotation(self.pitch_angle * scalar, self.yaw_angle * scalar)
+        return Rotation(self.pitch * scalar, self.yaw * scalar)
 
     def __eq__(self, other: object) -> bool:
         """
@@ -643,19 +644,8 @@ class Rotation:
             True if rotations are equal, False otherwise
         """
         return (isinstance(other, Rotation) and
-                self.pitch_angle == other.pitch_angle and
-                self.yaw_angle == other.yaw_angle)
-
-    def __str__(self) -> str:
-        """
-        Return string representation of the rotation.
-
-        Returns
-        -------
-        str
-            String representation
-        """
-        return f"<Rotation pitch={self.pitch_angle}°, yaw={self.yaw_angle}°>"
+                self.pitch == other.pitch and
+                self.yaw == other.yaw)
 
     def __repr__(self) -> str:
         """
@@ -666,4 +656,5 @@ class Rotation:
         str
             String representation
         """
-        return f"<Rotation pitch_angle={self.pitch_angle}, yaw_angle={self.yaw_angle}>"
+        fmt = lambda n: str(int(n)) if n == int(n) else f"{n:.2f}"
+        return f"<Rotation pitch={fmt(self.pitch)}, yaw={fmt(self.yaw)}>"
