@@ -124,6 +124,11 @@ def pack_string(value: str) -> bytes:
     encoded = value.encode('utf-8')
     return write_varint(len(encoded)) + encoded
 
+
+
+
+
+
 def read_angle(buffer: ProtocolBuffer) -> float:
     """Read an angle from buffer (1 byte, scaled to 360 degrees)"""
     angle_byte = read_ubyte(buffer)
@@ -358,6 +363,16 @@ def pack_byte_array(data: bytes, include_length: bool = True) -> bytes:
     return data
 
 
+def pack_position(x: int, y: int, z: int) -> bytes:
+    x = x & 0x3FFFFFF  # 26 bits
+    y = y & 0xFFF  # 12 bits
+    z = z & 0x3FFFFFF  # 26 bits
+
+    # Correct bit shifting: X << 38, Y << 26, Z << 0
+    val = (x << 38) | (y << 26) | z
+    return struct.pack('>Q', val)
+
+
 def read_position(buffer: ProtocolBuffer) -> Tuple[int, int, int]:
     """
     Read a 64-bit position value from buffer and decode into x, y, z coordinates.
@@ -449,6 +464,8 @@ def _read_list_payload(buffer: ProtocolBuffer) -> List[Any]:
         items.append(_read_nbt_payload(buffer, list_type))
 
     return items
+
+
 
 
 def _read_nbt_payload(buffer: ProtocolBuffer, tag_type: int) -> Any:

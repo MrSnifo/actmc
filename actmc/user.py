@@ -157,4 +157,131 @@ class User(BaseEntity):
         """
         await self._state.send_entity_action(self.id, action_id, jump_boost)
 
-    
+    async def respawn(self) -> None:
+        """Perform a respawn"""
+        await self._state.send_client_status(0)
+
+    async def interact_with(self, entity: BaseEntity, hand: Literal[0, 1] = 0) -> None:
+        """
+        Perform a right-click interaction with an entity.
+
+        Parameters
+        ----------
+        entity: BaseEntity
+            The target entity.
+        hand: Literal[0, 1]
+            Hand used to interact (0 = main hand, 1 = off-hand).
+        """
+        await self._state.send_use_entity(entity.id, action=0, hand=hand)
+
+    async def attack(self, entity: BaseEntity) -> None:
+        """
+        Perform a left-click attack on an entity.
+
+        Parameters
+        ----------
+        entity: BaseEntity
+            The target entity.
+        """
+        await self._state.send_use_entity(entity.id, action=1)
+
+    async def interact_at(self, entity: BaseEntity, hitbox: Vector3D[float], hand: Literal[0, 1] = 0) -> None:
+        """
+        Perform a precise interaction at a specific location on an entity.
+
+        Parameters
+        ----------
+        entity: BaseEntity
+            The target entity.
+        hitbox: Vector3D[float]
+            The coordinates on the entity's hitbox.
+        hand: Literal[0, 1]
+            Hand used to interact (0 = main hand, 1 = off-hand).
+        """
+        await self._state.send_use_entity(entity.id, action=2, hitbox=hitbox, hand=hand)
+
+    async def swing_arm(self, hand: Literal[0, 1] = 0) -> None:
+        """
+        Swing the player's arm.
+
+        Parameters
+        ----------
+        hand: Literal[0, 1]
+            Hand to swing (0 = main hand, 1 = off-hand).
+        """
+        await self._state.send_swing_arm(hand)
+
+    async def start_digging(self, position: Vector3D[int], face: int) -> None:
+        """
+        Start digging a block.
+
+        Parameters
+        ----------
+        position: Vector3D[int]
+            The (x, y, z) coordinates of the block to start digging.
+        face: int
+            The face of the block being targeted (0=down, 1=up, 2=north, 3=south, 4=west, 5=east).
+        """
+        await self._state.send_player_digging(0, position, face)
+
+    async def cancel_digging(self, position: Vector3D[int], face: int) -> None:
+        """
+        Cancel digging a block.
+
+        Parameters
+        ----------
+        position: Vector3D[int]
+            The (x, y, z) coordinates of the block where digging is cancelled.
+        face: int
+            The face of the block being targeted.
+        """
+        await self._state.send_player_digging(1, position, face)
+
+    async def finish_digging(self, position: Vector3D[int], face: int) -> None:
+        """
+        Finish digging (break) a block.
+
+        Parameters
+        ----------
+        position: Vector3D[int]
+            The (x, y, z) coordinates of the block being broken.
+        face: int
+            The face of the block being targeted.
+        """
+        await self._state.send_player_digging(2, position, face)
+
+    async def drop_item_stack(self) -> None:
+        """
+        Drop the entire item stack.
+
+        This corresponds to pressing the drop key with a modifier to drop the full stack.
+        Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
+        """
+        await self._state.send_player_digging(3, Vector3D(0, 0, 0), 0)
+
+    async def drop_item(self) -> None:
+        """
+        Drop a single item.
+
+        This corresponds to pressing the drop key without modifiers.
+        Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
+        """
+        await self._state.send_player_digging(4, Vector3D(0, 0, 0), 0)
+
+    async def shoot_arrow_or_finish_eating(self) -> None:
+        """
+        Use the currently held item.
+
+        For example, shooting a bow, finishing eating, or using buckets.
+        Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
+        """
+        await self._state.send_player_digging(5, Vector3D(0, 0, 0), 0)
+
+    async def swap_item_in_hand(self) -> None:
+        """
+        Swap item to the second hand.
+
+        Used to swap or assign an item to the offhand slot.
+        Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
+        """
+        await self._state.send_player_digging(6, Vector3D(0, 0, 0), 0)

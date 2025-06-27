@@ -390,13 +390,87 @@ class ConnectionState:
 
     # ============================== Client Actions ==============================
 
-    async def send_client_status(self, action_id: Literal[0, 1]) -> None:
-        """
-        Send a Client Status packet to the server.
+    async def send_use_entity(
+            self,
+            target_id: int,
+            action: Literal[0, 1, 2],
+            hitbox: Optional[math.Vector3D[float]] = None,
+            hand: Optional[Literal[0, 1]] = None) -> None:
+        """Send a Use Entity packet to the server. """
+        buffer =protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(target_id))
+        buffer.write(protocol.write_varint(action))
 
-        Args:
-            action_id: Action to perform (0: respawn, 1: request statistics)
+        if action == 2:
+            buffer.write(protocol.pack_float(hitbox.x or 0.0))
+            buffer.write(protocol.pack_float(hitbox.y or 0.0))
+            buffer.write(protocol.pack_float(hitbox.z or 0.0))
+
+        if action in (0, 2):
+            buffer.write(protocol.write_varint(hand if hand is not None else 0))
+
+        await self.send_packet(0x0A, buffer.getvalue())
+
+    async def send_swing_arm(self, hand: int = 0) -> None:
         """
+        Send the Animation (Swing Arm) packet (0x1D).
+
+        Parameters
+        ----------
+        hand: int
+            Hand used for the animation.
+            0 = main hand
+            1 = off-hand
+        """
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(hand))
+        await self.send_packet(0x1D, buffer.getvalue())
+
+    async def send_player_digging(self,
+                                  status: int,
+                                  position: math.Vector3D[int] = math.Vector3D(0, 0, 0),
+                                  face: int = 0) -> None:
+        """
+        Send the Player Digging packet (0x14).
+
+        Parameters
+        ----------
+        status: int
+            The action the player is taking against the block.
+
+            Valid values:
+
+            0 : Started digging
+
+            1 : Cancelled digging
+
+            2 : Finished digging
+
+            3 : Drop item stack (position set to 0,0,0; face = down)
+
+            4 : Drop item (position set to 0,0,0; face = down)
+
+            5 : Shoot arrow / finish eating (position set to 0,0,0; face = down)
+
+            6 : Swap item in hand (position set to 0,0,0; face = down)
+
+        position: math.Vector3D[int]
+            The block position (x, y, z). Ignored if status is 3-6.
+
+        face: int
+            The face of the block being hit (0=down,1=up,2=north,3=south,4=west,5=east).
+
+            Ignored if status is 3-6. Defaults to 0.
+        """
+        buffer = protocol.ProtocolBuffer()
+        # Write fields in correct order: Status, Position, Face
+        buffer.write(protocol.write_varint(status))
+        buffer.write(protocol.pack_position(position.x, position.y, position.z))  # Position as single field
+        buffer.write(protocol.pack_byte(face))
+        await self.send_packet(0x14, buffer.getvalue())
+
+    async def send_client_status(self, action_id: Literal[0, 1]) -> None:
+        """Send a Client Status packet to the server."""
         await self.send_packet(0x03, protocol.write_varint(action_id))
 
     async def get_statistics(self) -> Dict[str, int]:
