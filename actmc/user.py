@@ -211,6 +211,33 @@ class User(BaseEntity):
         """
         await self._state.send_swing_arm(hand)
 
+    async def use_item(self, hand: Literal[0, 1] = 0) -> None:
+        """
+        Use the item in the specified hand.
+
+        This sends a Use Item packet to the server, which is triggered when
+        right-clicking with an item. This can be used for:
+        - Eating food
+        - Drinking potions
+        - Using tools (bow, fishing rod, etc.)
+        - Placing blocks
+        - Activating items
+
+        Parameters
+        ----------
+        hand: Literal[0, 1]
+            Hand to use the item with (0 = main hand, 1 = off hand).
+        """
+        await self._state.send_use_item(hand)
+
+    async def release_item_use(self) -> None:
+        """
+        Use the currently held item.
+
+        For example, shooting a bow, finishing eating, or using buckets.
+        """
+        await self._state.send_player_digging(5, Vector3D(0, 0, 0), 0)
+
     async def start_digging(self, position: Vector3D[int], face: int) -> None:
         """
         Start digging a block.
@@ -268,14 +295,7 @@ class User(BaseEntity):
         """
         await self._state.send_player_digging(4, Vector3D(0, 0, 0), 0)
 
-    async def shoot_arrow_or_finish_eating(self) -> None:
-        """
-        Use the currently held item.
 
-        For example, shooting a bow, finishing eating, or using buckets.
-        Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
-        """
-        await self._state.send_player_digging(5, Vector3D(0, 0, 0), 0)
 
     async def swap_item_in_hand(self) -> None:
         """

@@ -426,6 +426,23 @@ class ConnectionState:
         buffer.write(protocol.write_varint(hand))
         await self.send_packet(0x1D, buffer.getvalue())
 
+    async def send_use_item(self, hand: int = 0) -> None:
+        """
+        Send the Use Item packet (0x20).
+
+        Sent when pressing the Use Item key (default: right click) with an item in hand.
+
+        Parameters
+        ----------
+        hand: int
+            Hand used for the animation.
+            0 = main hand
+            1 = off-hand
+        """
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(hand))
+        await self.send_packet(0x20, buffer.getvalue())
+
     async def send_player_digging(self,
                                   status: int,
                                   position: math.Vector3D[int] = math.Vector3D(0, 0, 0),
@@ -573,11 +590,8 @@ class ConnectionState:
         position = protocol.read_ubyte(buffer)
 
         message = Message(chat)
-
-        # Route message based on position type
         message_type = {0: 'chat_message', 1: 'system_message', 2: 'action_bar'}.get(position)
         if message_type:
-            _logger.debug(f"Received {message_type}: {message}")
             self._dispatch(message_type, message)
         else:
             _logger.warning(f"Unknown chat position {position} for message: {message}")
