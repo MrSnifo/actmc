@@ -24,9 +24,11 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from .entity import BaseEntity, ObjectEntity
-from ..types.entities import block, entity
-from ..math import Vector3D, Rotation
+from .entity import BaseEntity
+from ..types.entities import block
+
+from .entity import Entity
+from ..math import Vector3D
 from typing import TYPE_CHECKING
 from ..ui.chat import Message
 
@@ -521,40 +523,52 @@ class FlowerPot(BaseEntity[str]):
     def __repr__(self) -> str:
         return f"<FlowerPot item={self.item}, data={self.data}>"
 
-
-class FallingBlock(ObjectEntity):
-    """
-    Represents a falling block entity in Minecraft.
-
-    Falling blocks are temporary entities created when gravity-affected
-    blocks (like sand or gravel) lose their support.
-
-    Attributes
-    ----------
-    block_id: int
-        ID of the falling block type.
-    rotation: Rotation
-        of the falling block.
-    metadata: int
-        Metadata value for the block.
-    """
-    __slots__ = ('block_id', 'rotation', 'metadata')
-
-    # Bit masks for data extraction
-    BLOCK_ID_MASK: ClassVar[int] = 0xFFF
-    METADATA_MASK: ClassVar[int] = 0xF
-    METADATA_SHIFT: ClassVar[int] = 12
-
-    def __init__(self, data: entity.SpawnObject) -> None:
-        super().__init__(data['entity_id'], data['type'], data['uuid'], Vector3D(data['x'], data['y'], data['z']))
-        self.rotation: Rotation = Rotation(data['pitch'], data['yaw'])
-        self.block_id: int = data['data'] & self.BLOCK_ID_MASK
-        self.metadata: int = (data['data'] >> self.METADATA_SHIFT) & self.METADATA_MASK
-
-    def __repr__(self) -> str:
-        return f"<FallingBlock id={self.id}, block_id={self.block_id}, position={self.position}>"
+class FallingBlock(Entity):
+    """Falling block entity extending Entity."""
+    __slots__ = ()
 
     @property
-    def has_metadata(self) -> bool:
-        """Check if falling block has metadata."""
-        return self.metadata > 0
+    def spawn_position(self) -> Any:
+        """Spawn position from metadata index 6."""
+        return self.get_metadata_value(6)
+
+    @property
+    def has_spawn_position(self) -> bool:
+        """Whether spawn position data is available."""
+        return self.spawn_position is not None
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
+
+
+class TNTPrimed(Entity):
+    """Primed TNT entity extending Entity."""
+    __slots__ = ()
+
+    @property
+    def fuse_time(self) -> int:
+        """Fuse time in ticks from metadata index 6."""
+        return int(self.get_metadata_value(6, 80))
+
+    @property
+    def seconds_until_explosion(self) -> float:
+        """Get seconds until explosion (assuming 20 ticks per second)."""
+        return self.fuse_time / 20.0
+
+    @property
+    def is_about_to_explode(self) -> bool:
+        """Whether TNT is about to explode (less than 1 second)."""
+        return self.fuse_time < 20
+
+    @property
+    def is_critical(self) -> bool:
+        """Whether TNT is in critical explosion phase (less than 0.5 seconds)."""
+        return self.fuse_time < 10
+
+    @property
+    def explosion_percentage(self) -> float:
+        """Percentage of fuse time elapsed (0.0 to 1.0)."""
+        return max(0.0, (80 - self.fuse_time) / 80.0)
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"

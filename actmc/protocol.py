@@ -4,7 +4,7 @@ import uuid
 import io
 from .errors import DataTooShortError, InvalidDataError
 from typing import Union, Optional, Tuple, Dict, List, Any
-from .enums import NBTTagType
+
 
 class ProtocolBuffer:
     """A wrapper around BytesIO with protocol-specific methods"""
@@ -151,7 +151,7 @@ def read_chat(data: ProtocolBuffer) -> Union[str, Dict, List]:
     """
     Read a chat component from the protocol buffer.
 
-    Chat data is sent as a UTF-8 encoded JSON string in the protocol.
+    Chat data is sent as a UTF-8 encoded JSON string in the 
     The JSON can represent:
     - A simple string (converted to string component)
     - A JSON object (chat component)
@@ -364,31 +364,17 @@ def pack_byte_array(data: bytes, include_length: bool = True) -> bytes:
 
 
 def pack_position(x: int, y: int, z: int) -> bytes:
-    x = x & 0x3FFFFFF  # 26 bits
-    y = y & 0xFFF  # 12 bits
-    z = z & 0x3FFFFFF  # 26 bits
+    x = x & 0x3FFFFFF
+    y = y & 0xFFF
+    z = z & 0x3FFFFFF
 
-    # Correct bit shifting: X << 38, Y << 26, Z << 0
     val = (x << 38) | (y << 26) | z
     return struct.pack('>Q', val)
 
 
 def read_position(buffer: ProtocolBuffer) -> Tuple[int, int, int]:
-    """
-    Read a 64-bit position value from buffer and decode into x, y, z coordinates.
-
-    Position format:
-    - x: 26 MSBs (most significant bits)
-    - y: 12 bits in the middle
-    - z: 26 LSBs (least significant bits)
-
-    Returns:
-        Tuple[int, int, int]: (x, y, z) coordinates with proper sign handling
-    """
-    # Read the 64-bit unsigned value from buffer
     val = read_ulong(buffer)
 
-    # Extract the three components using bit operations
     x = val >> 38  # Get top 26 bits
     y = (val >> 26) & 0xFFF  # Get middle 12 bits
     z = val & 0x3FFFFFF  # Get bottom 26 bits using mask
@@ -413,8 +399,8 @@ def read_nbt(buffer: ProtocolBuffer) -> Dict[str, Any]:
     """Read NBT buffer from protocol buffer - starts with a compound tag"""
     tag_type = read_ubyte(buffer)
 
-    if tag_type != NBTTagType.TAG_COMPOUND:
-        raise ValueError(f"NBT must start with TAG_Compound, got tag type: {tag_type}")
+    if tag_type != 10:
+        raise ValueError(f"NBT must start with 10, got tag type: {tag_type}")
 
     # Read the root compound name
     root_name = _read_nbt_string(buffer)
@@ -440,7 +426,7 @@ def _read_compound_payload(buffer: ProtocolBuffer) -> Dict[str, Any]:
     while True:
         tag_type = read_ubyte(buffer)
 
-        if tag_type == NBTTagType.TAG_END:
+        if tag_type == 0:
             break
 
         # Read tag name
@@ -466,51 +452,154 @@ def _read_list_payload(buffer: ProtocolBuffer) -> List[Any]:
     return items
 
 
-
-
 def _read_nbt_payload(buffer: ProtocolBuffer, tag_type: int) -> Any:
     """Read the payload of an NBT tag based on its type"""
-    if tag_type == NBTTagType.TAG_END:
+    if tag_type == 0:
         return None
 
-    elif tag_type == NBTTagType.TAG_BYTE:
+    elif tag_type == 1:
         return read_byte(buffer)  # signed byte
 
-    elif tag_type == NBTTagType.TAG_SHORT:
+    elif tag_type == 2:
         return read_short(buffer)  # signed short, big-endian
 
-    elif tag_type == NBTTagType.TAG_INT:
+    elif tag_type == 3:
         return read_int(buffer)  # signed int, big-endian
 
-    elif tag_type == NBTTagType.TAG_LONG:
+    elif tag_type == 4:
         return read_long(buffer)  # signed long, big-endian
 
-    elif tag_type == NBTTagType.TAG_FLOAT:
+    elif tag_type == 5:
         return read_float(buffer)  # IEEE-754 single precision, big-endian
 
-    elif tag_type == NBTTagType.TAG_DOUBLE:
+    elif tag_type == 6:
         return read_double(buffer)  # IEEE-754 double precision, big-endian
 
-    elif tag_type == NBTTagType.TAG_BYTE_ARRAY:
+    elif tag_type == 7:
         length = read_int(buffer)  # signed int (4 bytes)
         return [read_byte(buffer) for _ in range(length)]
 
-    elif tag_type == NBTTagType.TAG_STRING:
+    elif tag_type == 8:
         return _read_nbt_string(buffer)
 
-    elif tag_type == NBTTagType.TAG_LIST:
+    elif tag_type == 9:
         return _read_list_payload(buffer)
 
-    elif tag_type == NBTTagType.TAG_COMPOUND:
+    elif tag_type == 10:
         return _read_compound_payload(buffer)
 
-    elif tag_type == NBTTagType.TAG_INT_ARRAY:
+    elif tag_type == 11:
         length = read_int(buffer)  # signed int (4 bytes)
         return [read_int(buffer) for _ in range(length)]
 
-    elif tag_type == NBTTagType.TAG_LONG_ARRAY:
+    elif tag_type == 12:
         length = read_int(buffer)  # signed int (4 bytes)
         return [read_long(buffer) for _ in range(length)]
 
     else:
         raise ValueError(f"Unknown NBT tag type: {tag_type}")
+
+
+def read_entity_metadata(buffer: ProtocolBuffer) -> Dict[int, Any]:
+    """Read entity metadata from buffer"""
+    metadata = {}
+
+    while True:
+        # Read the index byte
+        index = read_ubyte(buffer)
+
+        # Index 0xFF marks the end of metadata
+        if index == 0xFF:
+            break
+
+        # Read the type
+        metadata_type = read_varint(buffer)
+
+        # Handle unknown metadata types gracefully
+        try:
+            # Read the value based on type (according to wiki.vg documentation)
+            if metadata_type == 0:  # Byte
+                value = read_byte(buffer)
+            elif metadata_type == 1:  # VarInt
+                value = read_varint(buffer)
+            elif metadata_type == 2:  # Float
+                value = read_float(buffer)
+            elif metadata_type == 3:  # String
+                value = read_string(buffer)
+            elif metadata_type == 4:  # Chat
+                value = read_chat(buffer)
+            elif metadata_type == 5:  # Slot
+                value = read_slot(buffer)
+            elif metadata_type == 6:  # Boolean
+                value = read_bool(buffer)
+            elif metadata_type == 7:  # Rotation (3 floats: x, y, z)
+                value = {
+                    'x': read_float(buffer),
+                    'y': read_float(buffer),
+                    'z': read_float(buffer)
+                }
+            elif metadata_type == 8:  # Position
+                value = read_position(buffer)
+            elif metadata_type == 9:  # OptPosition (Boolean + Optional Position)
+                has_value = read_bool(buffer)
+                value = read_position(buffer) if has_value else None
+            elif metadata_type == 10:  # Direction (VarInt)
+                value = read_varint(buffer)
+            elif metadata_type == 11:  # OptUUID (Boolean + Optional UUID)
+                has_value = read_bool(buffer)
+                value = read_uuid(buffer) if has_value else None
+            elif metadata_type == 12:  # OptBlockID (VarInt)
+                value = read_varint(buffer)
+            elif metadata_type == 13:  # NBT Tag
+                value = read_nbt(buffer)
+            else:
+                value = f"<unknown_type_{metadata_type}>"
+        except Exception as e:
+            value = f"<error_reading_type_{metadata_type}>"
+
+
+        metadata[index] = {'type': metadata_type, 'value': value}
+
+    return metadata
+
+
+def read_slot(buffer: ProtocolBuffer) -> Optional[Dict[str, Any]]:
+    """Read slot data from buffer according to Minecraft protocol"""
+    # Read Block ID (Short)
+    item_id = read_short(buffer)
+
+    if item_id == -1:
+        return None
+
+    # Read Item Count (Byte) - only present if Block ID is not -1
+    item_count = read_byte(buffer)
+
+    # Read Item Damage (Short) - only present if Block ID is not -1
+    item_damage = read_short(buffer)
+
+    # Read NBT data - only present if Block ID is not -1
+    nbt_data = None
+    if buffer.remaining() > 0:
+        pos = buffer.tell()
+        try:
+            # Check if NBT data is present (non-zero byte)
+            nbt_indicator = read_byte(buffer)
+
+            if nbt_indicator == 0:
+                # No NBT data
+                nbt_data = None
+            else:
+                # Reset position and read NBT compound
+                buffer.seek(pos)
+                nbt_data = read_nbt(buffer)
+        except (EOFError, ValueError, struct.error):
+            # If NBT reading fails, reset position
+            buffer.seek(pos)
+            nbt_data = None
+
+    return {
+        'item_id': item_id,
+        'item_count': item_count,
+        'item_damage': item_damage,
+        'nbt': nbt_data
+    }

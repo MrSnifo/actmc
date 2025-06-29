@@ -31,6 +31,8 @@ from .chunk import *
 from .user import User
 import asyncio
 
+from .entities import BLOCK_ENTITY_TYPES, ENTITY_TYPES
+
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
     from .gateway import MinecraftSocket
@@ -39,19 +41,10 @@ if TYPE_CHECKING:
 import logging
 _logger = logging.getLogger(__name__)
 
+#
+# todo: rework metadata update to all classes...
+#
 
-BLOCK_ENTITY_TYPES = {
-    'minecraft:bed': entities.block.Bed,
-    'minecraft:flower_pot': entities.block.FlowerPot,
-    'minecraft:banner': entities.block.Banner,
-    'minecraft:beacon': entities.block.Beacon,
-    'minecraft:sign': entities.block.Sign,
-    'minecraft:mob_spawner': entities.block.MobSpawner,
-    'minecraft:skull': entities.block.Skull,
-    'minecraft:structure_block': entities.block.StructureBlock,
-    'minecraft:end_gateway': entities.block.EndGateway,
-    'minecraft:shulker_box': entities.block.ShulkerBox
-}
 
 __all__ = ('ConnectionState',)
 
@@ -92,6 +85,7 @@ class ConnectionState:
         # World state
         self.chunks: Dict[math.Vector2D, Chunk] = {}
 
+        self.entities: Dict[int, entities.entity.Entity] = {}
         # Initialize packet parser cache
         if not self._packet_parsers:
             self._build_parser_cache()
@@ -363,8 +357,24 @@ class ConnectionState:
             # Create generic entity for unknown types
             block_entity = entities.entity.BaseEntity(entity_id)
             if data:
-                _logger.warning(f"Unknown block entity '{entity_id}' with data: {data}")
+                _logger.warning(f"Unknown block entity Type: '{entity_id}' with data: {data}")
             return block_entity
+
+    @staticmethod
+    def _create_mob_entity(mob_type: int,
+                           entity_id: int,
+                           uuid: str,
+                           position: math.Vector3D[float],
+                           rotation: math.Rotation,
+                           metadata: Dict[int, Dict[str, Any]]) -> entities.entity.Entity:
+        entity_class = ENTITY_TYPES.get(mob_type)
+        if entity_class:
+            return entity_class(entity_id, uuid, position, rotation, metadata)
+        else:
+            mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, metadata)
+            if mob_type:
+                _logger.warning(f"Unknown mob entity Type: '{mob_type}', With data: {metadata}")
+            return mob_entity
 
     # ============================== Packet Parsing ==============================
 
@@ -575,6 +585,8 @@ class ConnectionState:
         self.user = User(entity_id, self.username, self.uid, state=self)
         self.user.gamemode = self.user.GAMEMODE.get(gamemode, 'survival')
         self.user.dimension = self.user.DIMENSION.get(dimension, 'overworld')
+        # Needed to update user properties and metadata.
+        self.entities[entity_id] = self.user
         self._dispatch('join')
 
     async def parse_0x1a(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -594,7 +606,7 @@ class ConnectionState:
         if message_type:
             self._dispatch(message_type, message)
         else:
-            _logger.warning(f"Unknown chat position {position} for message: {message}")
+            _logger.warning(f"Unknown chat Position: {position}, For message: {message}")
 
     async def parse_0x20(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Chunk Data packet (0x20)."""
@@ -633,7 +645,7 @@ class ConnectionState:
             self.chunks[math.Vector2D(chunk_x, chunk_z)] = chunk
 
         self._dispatch('chunk_load', chunk)
-        
+
     async def parse_0x1d(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Unload Chunk packet (0x1D)."""
         chunk_x = protocol.read_int(buffer)
@@ -837,7 +849,8 @@ class ConnectionState:
 
         Notes:
             Avoid respawning the player in the same dimension unless they are dead.
-            To force a respawn in the same dimension, send two respawn packets: one to a different dimension, then the desired one.
+            To force a respawn in the same dimension, send two respawn packets: one to a different dimension,
+            then the desired one.
         """
         dimension = protocol.read_int(data)
         difficulty = protocol.read_ubyte(data)
@@ -851,5 +864,301 @@ class ConnectionState:
 
         self._dispatch('respawn', dimension, difficulty, gamemode, level_type)
 
+    # MOB / Player only
 
+    async def parse_0x25(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity (Packet ID: 0x25)"""
+        entity_id = protocol.read_varint(buffer)
+
+        """print('entity', {
+            'entity_id': entity_id
+        })"""
+
+    async def parse_0x05(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Spawn Player (Packet ID: 0x05)"""
+        entity_id = protocol.read_varint(buffer)
+        player_uuid = protocol.read_uuid(buffer)
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+        yaw = protocol.read_angle(buffer)
+        pitch = protocol.read_angle(buffer)
+        metadata = protocol.read_entity_metadata(buffer)
+
+        player = entities.player.Player(entity_id, player_uuid, math.Vector3D(x, y, z), math.Rotation(pitch, yaw),
+                                        metadata)
+        self.entities[entity_id] = player
+        self._dispatch('spawn_player', player)
+
+    async def parse_0x4e(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Properties (Packet ID: 0x4E)"""
+        entity_id = protocol.read_varint(buffer)
+        num_properties = protocol.read_int(buffer)
+
+        properties = {}
+        for _ in range(num_properties):
+            key = protocol.read_string(buffer, max_length=64)
+            value = protocol.read_double(buffer)
+            num_modifiers = protocol.read_varint(buffer)
+
+            modifiers = {}
+            for _ in range(num_modifiers):
+                modifier_uuid = protocol.read_uuid(buffer)
+                amount = protocol.read_double(buffer)
+                operation = protocol.read_byte(buffer)
+                modifiers[modifier_uuid] = {'amount': amount, 'operation': operation}
+            properties[key] = {'value': value, 'modifiers': modifiers}
+
+        # Update entity if it exists
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
+            entity.update_properties(properties)
+            self._dispatch('entity_properties', entity, properties)
+        else:
+            _logger.warning(f"Unknown entity ID: '{entity_id}', with properties: {properties}")
+
+    async def parse_0x4c(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Teleport (Packet ID: 0x4C)"""
+        entity_id = protocol.read_varint(buffer)
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+        yaw = protocol.read_angle(buffer)
+        pitch = protocol.read_angle(buffer)
+        on_ground = protocol.read_bool(buffer)
+
+        if entity_id in self.entities:
+            self.entities[entity_id].position = math.Vector3D(x, y, z)
+            self.entities[entity_id].rotation = math.Rotation(pitch, yaw)
+            self._dispatch('entity_teleport', self.entities[entity_id], on_ground)
+
+
+    async def parse_0x26(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Relative Move (Packet ID: 0x26)"""
+        entity_id = protocol.read_varint(buffer)
+        delta_x = protocol.read_short(buffer)
+        delta_y = protocol.read_short(buffer)
+        delta_z = protocol.read_short(buffer)
+        on_ground = protocol.read_bool(buffer)
+
+        delta = math.Vector3D(delta_x / 4096.0, delta_y / 4096.0, delta_z / 4096.0)
+
+        # Update entity if it exists
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
+            current_pos = entity.position
+
+            # Apply relative movement
+            new_x = current_pos.x + delta.x
+            new_y = current_pos.y + delta.y
+            new_z = current_pos.z + delta.z
+
+            entity.position = math.Vector3D(new_x, new_y, new_z)
+            self._dispatch('entity_move', entity, delta, on_ground)
+
+    async def parse_0x27(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Look And Relative Move (Packet ID: 0x27)"""
+        entity_id = protocol.read_varint(buffer)
+        delta_x_raw = protocol.read_short(buffer)  # Change in position * 4096
+        delta_y_raw = protocol.read_short(buffer)
+        delta_z_raw = protocol.read_short(buffer)
+        yaw = protocol.read_angle(buffer)  # Absolute yaw
+        pitch = protocol.read_angle(buffer)  # Absolute pitch
+        on_ground = protocol.read_bool(buffer)
+
+        # Convert raw delta values to actual coordinate changes
+        delta_x = delta_x_raw / 4096.0
+        delta_y = delta_y_raw / 4096.0
+        delta_z = delta_z_raw / 4096.0
+
+        delta = math.Vector3D(delta_x, delta_y, delta_z)
+
+        # Update entity if it exists
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
+            current_pos = entity.position
+
+            # Apply relative movement
+            new_x = current_pos.x + delta.x
+            new_y = current_pos.y + delta.y
+            new_z = current_pos.z + delta.z
+
+            entity.position = math.Vector3D(new_x, new_y, new_z)
+            entity.rotation = math.Rotation(pitch, yaw)
+
+            self._dispatch('entity_move_look', entity, delta, on_ground)
+
+    async def parse_0x28(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Look (Packet ID: 0x28)"""
+        entity_id = protocol.read_varint(buffer)
+        yaw = protocol.read_angle(buffer)
+        pitch = protocol.read_angle(buffer)
+        on_ground = protocol.read_bool(buffer)
+
+        # Update entity if it exists
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
+            entity.rotation = math.Rotation(pitch, yaw)
+            self._dispatch('entity_look', entity, on_ground)
+
+    async def parse_0x36(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Head Look (Packet ID: 0x36)"""
+        entity_id = protocol.read_varint(buffer)
+        head_yaw = protocol.read_angle(buffer)
+
+        # Update entity if it exists
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
+            entity.rotation.yaw = head_yaw
+            self._dispatch('entity_head_look', entity)
+
+
+
+    async def parse_0x03(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Spawn Mob (Packet ID: 0x03)"""
+        entity_id = protocol.read_varint(buffer)
+        entity_uuid = protocol.read_uuid(buffer)
+        mob_type = protocol.read_varint(buffer)
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+        yaw = protocol.read_angle(buffer)
+        pitch = protocol.read_angle(buffer)
+        head_pitch = protocol.read_angle(buffer)
+        # Entity Velocity
+        _ = protocol.read_short(buffer)
+        _ = protocol.read_short(buffer)
+        _ = protocol.read_short(buffer)
+        metadata = protocol.read_entity_metadata(buffer)
+
+        mob_entity = self._create_mob_entity(mob_type, entity_id, entity_uuid, math.Vector3D(x, y, z),
+                                             math.Rotation(pitch, yaw), metadata)
+        self.entities[entity_id] = mob_entity
+        self._dispatch('spawn_mob', mob_entity, math.Rotation(head_pitch, 0))
+
+
+    async def parse_0x3e(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Velocity (Packet ID: 0x3E)"""
+        entity_id = protocol.read_varint(buffer)
+        velocity_x = protocol.read_short(buffer)
+        velocity_y = protocol.read_short(buffer)
+        velocity_z = protocol.read_short(buffer)
+
+        if entity_id in self.entities:
+            velocity = math.Vector3D(velocity_x, velocity_y, velocity_z)
+            self._dispatch('entity_velocity', self.entities[entity_id], velocity)
+
+    async def parse_0x3c(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Metadata (Packet ID: 0x3C)"""
+        entity_id = protocol.read_varint(buffer)
+        metadata = protocol.read_entity_metadata(buffer)
+
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
+            entity.update_metadata(metadata)
+            self._dispatch('entity_metadata', entity, metadata)
+
+    async def parse_0x3f(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Equipment (Packet ID: 0x3F)"""
+        entity_id = protocol.read_varint(buffer)
+        slot = protocol.read_varint(buffer)
+        item = protocol.read_slot(buffer)
+
+        if entity_id in self.entities:
+            self._dispatch('entity_equipment',  self.entities[entity_id], slot, item)
+
+    async def parse_0x32(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Destroy Entities (Packet ID: 0x32)"""
+        count = protocol.read_varint(buffer)
+        entity_ids = [protocol.read_varint(buffer) for _ in range(count)]
+
+        destroyed = {eid: self.entities.pop(eid, None) for eid in entity_ids if eid in self.entities}
+
+        if destroyed:
+            self._dispatch('destroy_entities', list(destroyed.values()))
+
+    async def parse_0x1b(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Entity Status (Packet ID: 0x1B)"""
+        entity_id = protocol.read_int(buffer)
+        status = protocol.read_byte(buffer)
+
+        """print('entity_status', {
+            'entity_id': entity_id,
+            'status': status,
+        })"""
+
+
+    # Object
+
+    async def parse_0x00(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Spawn Object (Packet ID: 0x00)"""
+        entity_id = protocol.read_varint(buffer)
+        entity_uuid = protocol.read_uuid(buffer)
+        obj_type = protocol.read_byte(buffer)
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+        pitch = protocol.read_angle(buffer)
+        yaw = protocol.read_angle(buffer)
+        data = protocol.read_int(buffer)
+        vel_x = protocol.read_short(buffer)
+        vel_y = protocol.read_short(buffer)
+        vel_z = protocol.read_short(buffer)
+
+
+        """print('spawn_object', {
+            'entity_id': entity_id,
+            'uuid': entity_uuid,
+            'type': obj_type,
+            'x': x,
+            'y': y,
+            'z': z,
+            'pitch': pitch,
+            'yaw': yaw,
+            'data': data,
+            'velocity': (vel_x, vel_y, vel_z),
+        })"""
+
+
+    async def parse_0x04(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Spawn Painting (Packet ID: 0x04)"""
+        entity_id = protocol.read_varint(buffer)
+        entity_uuid = protocol.read_uuid(buffer)
+        title = protocol.read_string(buffer, max_length=13)
+        position = protocol.read_position(buffer)
+        direction = protocol.read_byte(buffer)
+
+        """print('spawn_painting', {'entity_id': entity_id,
+                                                  'uuid': entity_uuid,
+                                                  'title': title,
+                                                  'pos': position,
+                                                  'direction': direction})"""
+
+    async def parse_0x02(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Spawn Global Entity (Packet ID: 0x02)"""
+        entity_id = protocol.read_varint(buffer)
+        entity_type = protocol.read_byte(buffer)
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+
+        """print('spawn_global_entity', {
+            'entity_id': entity_id,
+            'type': entity_type,  # 1 = thunderbolt
+            'position': (x, y, z)
+        })"""
+
+    async def parse_0x01(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Spawn Experience Orb (Packet ID: 0x01)"""
+        entity_id = protocol.read_varint(buffer)
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+        count = protocol.read_short(buffer)
+
+        """print('spawn_experience_orb', {
+            'entity_id': entity_id,
+            'position': (x, y, z),
+            'count': count
+        })"""
 

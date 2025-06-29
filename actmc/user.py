@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .entities.entity import BaseEntity
+from .entities.player import Player
 from typing import TYPE_CHECKING, overload
 from .math import Vector3D, Rotation
 
@@ -9,17 +10,17 @@ if TYPE_CHECKING:
     from .state import ConnectionState
 
 
-class User(BaseEntity):
+class User(Player):
     """Enhanced Minecraft Player class with utility methods
 
     Note: use hasattr to make sure that data....
 
     """
-    __slots__ = ('_state', 'username', 'uuid', 'gamemode', 'dimension',
+    __slots__ = ('_state', 'username', 'gamemode', 'dimension',
                  'health', 'food', 'food_saturation',
                  'level', 'total_experience', 'experience_bar',
                  'held_slot',
-                 'position', 'rotation', 'spawn_point')
+                 'spawn_point')
 
     GAMEMODE: ClassVar[Dict[int, Literal['survival', 'creative', 'adventure', 'spectator']]] = {
         0: 'survival',
@@ -36,12 +37,10 @@ class User(BaseEntity):
 
     if TYPE_CHECKING:
         username: str
-        uuid: str
         gamemode: Literal['survival', 'creative', 'adventure', 'spectator']
         dimension: Literal['nether', 'overworld', 'end']
 
         # Health
-        health: float
         food: int
         food_saturation: float
 
@@ -52,16 +51,11 @@ class User(BaseEntity):
 
         # Inventory
         held_slot: int
-
-        # Position
-        position: Vector3D[float]
-        rotation: Rotation
-
         # Spawn
         spawn_point: Vector3D[float]
 
     def __init__(self, entity_id: int, username: str, uuid: str, *, state: ConnectionState) -> None:
-        super().__init__(entity_id)
+        super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {})
         self._state: ConnectionState = state
         self._update(username, uuid)
 
