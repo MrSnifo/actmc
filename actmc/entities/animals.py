@@ -19,7 +19,7 @@ class Bat(Ambient):
         return bool(self.bat_bit_mask & 0x01)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, is_hanging={self.is_hanging}"
+        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, is_hanging={self.is_hanging}>"
 
 
 class WaterMob(Insentient):
@@ -370,8 +370,8 @@ class Parrot(TameableAnimal):
     def variant_name(self) -> str:
         """Human-readable parrot variant name."""
         variants = {
-            0: "red_blue", 1: "blue", 2: "green",
-            3: "yellow_blue", 4: "silver"
+            0: 'red_blue', 1: 'blue', 2: 'green',
+            3: 'yellow_blue', 4: 'silver'
         }
         return variants.get(self.variant, "unknown")
 

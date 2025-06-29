@@ -554,6 +554,7 @@ def read_entity_metadata(buffer: ProtocolBuffer) -> Dict[int, Any]:
                 value = read_nbt(buffer)
             else:
                 value = f"<unknown_type_{metadata_type}>"
+        # todo: i don't like this
         except Exception as e:
             value = f"<error_reading_type_{metadata_type}>"
 

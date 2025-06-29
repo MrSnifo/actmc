@@ -351,7 +351,7 @@ class ConnectionState:
             # Create generic entity for unknown types
             block_entity = entities.entity.BaseEntity(entity_id)
             if data:
-                _logger.warning(f"Unknown block entity Type: '{entity_id}' with data: {data}")
+                _logger.warning(f"Unknown block entity: {entity_id}, Type: '{entity_id}' with data: {data}")
             return block_entity
 
     @staticmethod
@@ -367,7 +367,7 @@ class ConnectionState:
         else:
             mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, metadata)
             if mob_type:
-                _logger.warning(f"Unknown mob entity Type: '{mob_type}', With data: {metadata}")
+                _logger.warning(f"Unknown mob entity: {entity_id}, Type: '{mob_type}', With data: {metadata}")
             return mob_entity
 
     @staticmethod
@@ -385,7 +385,7 @@ class ConnectionState:
         else:
             mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, {})
             if mob_type:
-                _logger.warning(f"Unknown object entity Type: '{mob_type}', With data: {data}")
+                _logger.warning(f"Unknown object entity: {entity_id}, Type: '{mob_type}', With data: {data}")
             return mob_entity
 
     # ============================== Packet Parsing ==============================
