@@ -104,14 +104,6 @@ class Minecart(Entity):
         return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
 
 
-class MinecartRideable(Minecart):
-    """Rideable Minecart entity extending Minecart."""
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
 class MinecartContainer(Minecart):
     """Container Minecart entity extending Minecart."""
     __slots__ = ()

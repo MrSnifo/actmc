@@ -31,7 +31,7 @@ from .chunk import *
 from .user import User
 import asyncio
 
-from .entities import BLOCK_ENTITY_TYPES, ENTITY_TYPES
+from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
@@ -41,13 +41,7 @@ if TYPE_CHECKING:
 import logging
 _logger = logging.getLogger(__name__)
 
-#
-# todo: rework metadata update to all classes...
-#
-
-
 __all__ = ('ConnectionState',)
-
 
 class ConnectionState:
     """
@@ -367,13 +361,31 @@ class ConnectionState:
                            position: math.Vector3D[float],
                            rotation: math.Rotation,
                            metadata: Dict[int, Dict[str, Any]]) -> entities.entity.Entity:
-        entity_class = ENTITY_TYPES.get(mob_type)
+        entity_class = MOB_ENTITY_TYPES.get(mob_type)
         if entity_class:
             return entity_class(entity_id, uuid, position, rotation, metadata)
         else:
             mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, metadata)
             if mob_type:
                 _logger.warning(f"Unknown mob entity Type: '{mob_type}', With data: {metadata}")
+            return mob_entity
+
+    @staticmethod
+    def _create_object_entity(mob_type: int,
+                           entity_id: int,
+                           uuid: str,
+                           position: math.Vector3D[float],
+                           rotation: math.Rotation,
+                           data: int) -> entities.entity.Entity:
+        entity = OBJECT_ENTITY_TYPES.get(mob_type)
+        if entity:
+            if isinstance(entity, dict):
+                entity = entity.get(data)
+            return entity(entity_id, uuid, position, rotation, {})
+        else:
+            mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, {})
+            if mob_type:
+                _logger.warning(f"Unknown object entity Type: '{mob_type}', With data: {data}")
             return mob_entity
 
     # ============================== Packet Parsing ==============================
@@ -1040,9 +1052,9 @@ class ConnectionState:
     async def parse_0x3e(self, buffer: protocol.ProtocolBuffer) -> None:
         """Entity Velocity (Packet ID: 0x3E)"""
         entity_id = protocol.read_varint(buffer)
-        velocity_x = protocol.read_short(buffer)
-        velocity_y = protocol.read_short(buffer)
-        velocity_z = protocol.read_short(buffer)
+        velocity_x = protocol.read_short(buffer) / 8000.0 * 20
+        velocity_y = protocol.read_short(buffer) / 8000.0 * 20
+        velocity_z = protocol.read_short(buffer) / 8000.0 * 20
 
         if entity_id in self.entities:
             velocity = math.Vector3D(velocity_x, velocity_y, velocity_z)
@@ -1101,23 +1113,16 @@ class ConnectionState:
         pitch = protocol.read_angle(buffer)
         yaw = protocol.read_angle(buffer)
         data = protocol.read_int(buffer)
-        vel_x = protocol.read_short(buffer)
-        vel_y = protocol.read_short(buffer)
-        vel_z = protocol.read_short(buffer)
+        # 20 ticks.
+        vel_x = protocol.read_short(buffer) / 8000.0 * 20
+        vel_y = protocol.read_short(buffer) / 8000.0 * 20
+        vel_z = protocol.read_short(buffer) / 8000.0 * 20
 
-
-        """print('spawn_object', {
-            'entity_id': entity_id,
-            'uuid': entity_uuid,
-            'type': obj_type,
-            'x': x,
-            'y': y,
-            'z': z,
-            'pitch': pitch,
-            'yaw': yaw,
-            'data': data,
-            'velocity': (vel_x, vel_y, vel_z),
-        })"""
+        velocity = math.Vector3D(vel_x, vel_y, vel_z)
+        entity = self._create_object_entity(obj_type, entity_id, entity_uuid, math.Vector3D(x, y, z),
+                                             math.Rotation(pitch, yaw), data)
+        self.entities[entity_id] = entity
+        self._dispatch('spawn_object', entity, velocity)
 
 
     async def parse_0x04(self, buffer: protocol.ProtocolBuffer) -> None:

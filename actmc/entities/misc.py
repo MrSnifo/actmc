@@ -136,7 +136,7 @@ class Item(Entity):
         return self.item is not None
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
+        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, item={self.item}>"
 
 
 class Flying(Entity):

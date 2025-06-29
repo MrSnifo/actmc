@@ -22,37 +22,7 @@ BLOCK_ENTITY_TYPES = {
     'minecraft:shulker_box': block.ShulkerBox
 }
 
-ENTITY_TYPES = {
-    # Generic / Misc
-    1: misc.Item,
-    # 2: misc.XPOrb,
-    3: misc.AreaEffectCloud,
-    # 8: misc.LeashKnot,
-    # 9: misc.Painting,
-    18: misc.ItemFrame,
-    # 20: block.PrimedTNT,
-    21: block.FallingBlock,
-    # 30: misc.ArmorStand,
-    200: misc.EnderCrystal,
-
-    # Projectiles
-    # 7: projectiles.ThrownEgg,
-    10: projectiles.Arrow,
-    11: projectiles.Snowball,
-    12: projectiles.Fireball,
-    # 13: projectiles.SmallFireball,
-    # 14: projectiles.ThrownEnderpearl,
-    # 15: projectiles.EyeOfEnderSignal,
-    # 16: projectiles.ThrownPotion,
-    # 17: projectiles.ThrownExpBottle,
-    # 19: projectiles.WitherSkull,
-    # 22: projectiles.FireworksRocketEntity,
-    # 24: projectiles.SpectralArrow,
-    # 25: projectiles.ShulkerBullet,
-    # 26: projectiles.DragonFireball,
-    104: projectiles.LlamaSpit,
-
-    # Animals
+MOB_ENTITY_TYPES = {
     90: animals.Pig,
     91: animals.Sheep,
     # 92: animals.Cow,
@@ -68,8 +38,6 @@ ENTITY_TYPES = {
     102: animals.PolarBear,
     103: animals.Llama,
     105: animals.Parrot,
-
-    # Monsters
     4: monsters.ElderGuardian,
     5: monsters.WitherSkeleton,
     6: monsters.Stray,
@@ -98,19 +66,41 @@ ENTITY_TYPES = {
     68: monsters.Guardian,
     69: monsters.Shulker,
     120: monsters.Villager,
-    33: monsters.EvocationFangs,
-
-    # Bosses
     63: bosses.EnderDragon,
     64: bosses.Wither,
-
-    # Vehicles
-    40: vehicles.MinecartCommandBlock,
-    41: vehicles.Boat,
-    42: vehicles.MinecartRideable,
-    43: vehicles.MinecartChest,
-    44: vehicles.MinecartFurnace,
-    45: vehicles.MinecartTNT,
-    46: vehicles.MinecartHopper,
-    47: vehicles.MinecartSpawner,
 }
+
+
+OBJECT_ENTITY_TYPES = {
+    1: vehicles.Boat,
+    10: {0: vehicles.Minecart, 1: vehicles.MinecartChest, 2: vehicles.MinecartFurnace,
+         3: vehicles.MinecartTNT, 4: vehicles.MinecartSpawner, 5: vehicles.MinecartHopper,
+         6: vehicles.MinecartCommandBlock},
+    50: block.TNTPrimed,
+    51: misc.EnderCrystal,
+    # 2: misc.ItemStack,
+    3: misc.AreaEffectCloud,
+    70: block.FallingBlock,
+    71: misc.ItemFrame,
+    # 72: objects.EyeOfEnder,
+    # 73: objects.ThrownPotion,
+    # 75: objects.ThrownExpBottle,
+    # 76: objects.FireworkRocket,
+    # 77: objects.LeashKnot,
+    # 78: objects.ArmorStand,
+    60: projectiles.TippedArrow,  # also covers regular arrow
+    61: projectiles.Snowball,
+    62: projectiles.Egg,
+    # 63: projectiles.GhastFireball,
+    # 64: projectiles.BlazeFireCharge,
+    # 65: projectiles.ThrownEnderpearl,
+    66: projectiles.WitherSkull,
+    # 67: projectiles.ShulkerBullet,
+    68: projectiles.LlamaSpit,
+    # 90: projectiles.FishingHook,
+    # 91: projectiles.SpectralArrow,
+    # 93: projectiles.DragonFireball,
+    # 79: objects.EvocationFangs,
+}
+
+
