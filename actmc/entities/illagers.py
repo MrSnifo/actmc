@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from .entity import Monster
+from .entity import Creature
 
 
 __all__ = ('AbstractIllager', 'SpellcasterIllager', 'VindicationIllager', 'EvocationIllager', 'IllusionIllager')
 
-class AbstractIllager(Monster):
+class AbstractIllager(Creature):
     """Abstract Illager entity extending Monster."""
     __slots__ = ()
 

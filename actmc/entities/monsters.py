@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from .entity import Monster
+from .entity import Creature
 
 __all__ = (
-    'Creeper', 'Spider', 'CaveSpider', 'Zombie', 'ZombieVillager', 'PigZombie', 'Husk', 'Giant', 'Slime', 'LavaSlime',
-    'Blaze', 'Enderman', 'Endermite', 'Silverfish', 'Witch', 'Guardian', 'ElderGuardian', 'Shulker', 'WitherBoss',
-    'Vex')
+    'Monster', 'Creeper', 'Spider', 'CaveSpider', 'Zombie', 'ZombieVillager', 'PigZombie', 'Husk', 'Giant', 'Slime',
+    'LavaSlime', 'Blaze', 'Enderman', 'Endermite', 'Silverfish', 'Witch', 'Guardian', 'ElderGuardian', 'Shulker',
+    'WitherBoss', 'Vex', 'AbstractSkeleton', 'Skeleton', 'WitherSkeleton', 'Stray')
+
+class Monster(Creature):
+    """Monster entity extending Creature."""
+    __slots__ = ()
 
 class Creeper(Monster):
     """Creeper entity extending Monster."""
@@ -256,3 +260,27 @@ class Vex(Monster):
     def is_in_attack_mode(self) -> bool:
         """Whether vex is in attack mode (bit 0)."""
         return bool(self._vex_bit_mask & 0x01)
+
+class AbstractSkeleton(Monster):
+    """AbstractSkeleton entity extending Monster."""
+    __slots__ = ()
+
+    @property
+    def is_swinging_arms(self) -> bool:
+        """Whether skeleton is swinging arms from metadata index 12."""
+        return bool(self.get_metadata_value(12, False))
+
+class Skeleton(AbstractSkeleton):
+    """Skeleton entity extending AbstractSkeleton."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:skeleton"
+
+class WitherSkeleton(AbstractSkeleton):
+    """Wither Skeleton entity extending AbstractSkeleton."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:wither_skeleton"
+
+class Stray(AbstractSkeleton):
+    """Stray entity extending AbstractSkeleton."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:stray"

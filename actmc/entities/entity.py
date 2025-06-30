@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict, Any, Union, TypeVar, Generic, Optional
 if TYPE_CHECKING:
     from ..math import Vector3D, Rotation
 
-__all__ = ('BaseEntity', 'Entity', 'Living', 'Insentient', 'Creature', 'Monster')
+__all__ = ('BaseEntity', 'Entity', 'Living', 'Insentient', 'Creature')
 
 T = TypeVar('T', int, str, default=int)
 
@@ -291,8 +291,4 @@ class Insentient(Living):
 
 class Creature(Insentient):
     """Creature entity extending Insentient."""
-    __slots__ = ()
-
-class Monster(Creature):
-    """Monster entity extending Creature."""
     __slots__ = ()
