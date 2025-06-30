@@ -10,6 +10,7 @@ from . import hanging
 from . import illagers
 from . import misc
 from . import monsters
+from . import player
 from . import projectiles
 from . import skeletons
 from . import tameable

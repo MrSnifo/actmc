@@ -11,10 +11,24 @@ class Projectile(Entity):
     """Projectile entity extending Entity."""
     __slots__ = ()
 
+
 class Arrow(Projectile):
     """Abstract base class for arrow projectiles."""
     __slots__ = ()
     ENTITY_TYPE = "minecraft:arrow"
+
+    @property
+    def shooter_entity_id(self) -> int:
+        """
+        Returns the entity ID of the shooter who fired the arrow.
+
+        Returns
+        -------
+        int
+            The actual entity ID of the shooter.
+        """
+        raw_id = self.get_metadata_value(-1, 0)
+        return raw_id - 1
 
     @property
     def is_critical(self) -> bool:
@@ -28,6 +42,8 @@ class Arrow(Projectile):
         """
         arrow_flags = int(self.get_metadata_value(6, 0))
         return bool(arrow_flags & 0x01)
+
+
 
 class TippedArrow(Arrow):
     """Tipped arrow projectile entity. """

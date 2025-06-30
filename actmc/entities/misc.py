@@ -288,6 +288,46 @@ class FallingBlock(Entity):
     ENTITY_TYPE = "minecraft:falling_block"
 
     @property
+    def _block_type_raw(self) -> int:
+        """
+        Returns the raw block type integer from metadata.
+
+        This encodes both block ID and metadata:
+        block_type = block_id | (metadata << 12)
+
+        Returns
+        -------
+        int
+            The raw encoded block type.
+        """
+        return self.get_metadata_value(-1, 0)  # Assuming metadata index 6 for block type
+
+    @property
+    def block_id(self) -> int:
+        """
+        Extracts the block ID from the raw block type integer.
+
+        Returns
+        -------
+        int
+            The block ID.
+        """
+        return self._block_type_raw & 0xFFF
+
+    @property
+    def block_metadata(self) -> int:
+        """
+        Extracts the block metadata from the raw block type integer.
+
+        Returns
+        -------
+        int
+            The block metadata.
+        """
+        return self._block_type_raw >> 12
+
+
+    @property
     def spawn_position(self) -> Optional[tuple[int, int, int]]:
         """
         Original spawn position from metadata index 6.
@@ -397,6 +437,18 @@ class FishingHook(Entity):
 
     __slots__ = ()
     ENTITY_TYPE = "minecraft:fishing_bobber"
+
+    @property
+    def owner_id(self) -> int:
+        """
+        Returns the entity ID of the owner who cast the fishing hook.
+
+        Returns
+        -------
+        int
+            The entity ID of the owner.
+        """
+        return self.get_metadata_value(-1, 0)
 
     @property
     def hooked_entity_id(self) -> int:

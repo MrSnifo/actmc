@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .entity import Monster
 
-
 __all__ = (
     'Creeper', 'Spider', 'CaveSpider', 'Zombie', 'ZombieVillager', 'PigZombie', 'Husk', 'Giant', 'Slime', 'LavaSlime',
     'Blaze', 'Enderman', 'Endermite', 'Silverfish', 'Witch', 'Guardian', 'ElderGuardian', 'Shulker', 'WitherBoss',

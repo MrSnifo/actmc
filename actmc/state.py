@@ -381,9 +381,9 @@ class ConnectionState:
         if entity:
             if isinstance(entity, dict):
                 entity = entity.get(data)
-            return entity(entity_id, uuid, position, rotation, {})
+            return entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
         else:
-            mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, {})
+            mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
             if mob_type:
                 _logger.warning(f"Unknown object entity: {entity_id}, Type: '{mob_type}', With data: {data}")
             return mob_entity

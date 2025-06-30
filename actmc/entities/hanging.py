@@ -10,8 +10,24 @@ from .entity import Entity
 __all__ = ('Hanging', 'ItemFrame', 'Painting')
 
 class Hanging(Entity):
-    """Hanging entity extending Entity."""
+    """Represents a hanging entity."""
+
     __slots__ = ()
+
+    @property
+    def orientation(self) -> str:
+        """
+        Gets the orientation/direction the hanging entity is facing.
+
+        Returns
+        -------
+        str
+            The direction as a string ('south', 'west', 'north', or 'east').
+        """
+        direction_map = {0: 'south', 1: 'west', 2: 'north', 3: 'east'}
+        value = self.get_metadata_value(-1)
+        return direction_map[value]
+
 
 class ItemFrame(Hanging):
     """Item frame hanging entity."""
