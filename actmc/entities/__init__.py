@@ -12,7 +12,6 @@ from . import misc
 from . import monsters
 from . import player
 from . import projectiles
-from . import skeletons
 from . import tameable
 from . import vehicles
 from . import villagers
@@ -32,8 +31,8 @@ BLOCK_ENTITY_TYPES = {
 
 MOB_ENTITY_TYPES = {
     4: monsters.ElderGuardian,
-    5: skeletons.WitherSkeleton,
-    6: skeletons.Stray,
+    5: monsters.WitherSkeleton,
+    6: monsters.Stray,
     23: monsters.Husk,
     27: monsters.ZombieVillager,
     28: animals.SkeletonHorse,
@@ -45,7 +44,7 @@ MOB_ENTITY_TYPES = {
     36: illagers.VindicationIllager,
     37: illagers.IllusionIllager,
     50: monsters.Creeper,
-    51: skeletons.Skeleton,
+    51: monsters.Skeleton,
     52: monsters.Spider,
     53: monsters.Giant,
     54: monsters.Zombie,
