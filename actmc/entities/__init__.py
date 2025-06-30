@@ -117,6 +117,11 @@ OBJECT_ENTITY_TYPES = {
     90: misc.FishingHook,
     91: projectiles.SpectralArrow,
     93: projectiles.DragonFireball,
-    9: hanging.Painting,
     18: hanging.ItemFrame,
+
+    # Custom
+    83: hanging.Painting,
+    69: misc.XPOrb,
+    200: misc.LightningBolt
+
 }

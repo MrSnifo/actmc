@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 from .entity import Entity, Living
 
-__all__ = ('Item', 'XPOrb', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock', 'FireworksRocket', 'TNTPrimed',
+__all__ = ('Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock', 'FireworksRocket', 'TNTPrimed',
            'LeashKnot', 'EvocationFangs', 'FishingHook', 'EnderCrystal')
 
 class Item(Entity):
@@ -37,12 +37,44 @@ class Item(Entity):
         """
         return self.item_stack is not None
 
+class LightningBolt(Entity):
+    """Lightning bolt entity."""
+
+    @property
+    def type(self) -> int:
+        """
+        The global entity type, currently always 1 for thunderbolt
+
+        Returns
+        -------
+        int
+            global entity type.
+        """
+        return int(self.get_metadata_value(-1, 1))
+
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:lightning_bolt"
 
 class XPOrb(Entity):
     """Experience orb entity."""
 
     __slots__ = ()
     ENTITY_TYPE = "minecraft:xp_orb"
+
+    @property
+    def count(self) -> float:
+        """
+        The amount of experience this orb will reward once collected
+
+        Returns
+        -------
+        float
+            experience amount.
+        """
+        return float(self.get_metadata_value(-1, 0.0))
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} id={self.id}, position={self.position} count={self.count}>"
 
 
 class AreaEffectCloud(Entity):

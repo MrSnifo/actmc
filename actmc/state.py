@@ -371,21 +371,21 @@ class ConnectionState:
             return mob_entity
 
     @staticmethod
-    def _create_object_entity(mob_type: int,
+    def _create_object_entity(object_type: int,
                            entity_id: int,
                            uuid: str,
                            position: math.Vector3D[float],
                            rotation: math.Rotation,
                            data: int) -> Any:
-        entity = OBJECT_ENTITY_TYPES.get(mob_type)
+        entity = OBJECT_ENTITY_TYPES.get(object_type)
         if entity:
             if isinstance(entity, dict):
                 entity = entity.get(data)
             return entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
         else:
             mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
-            if mob_type:
-                _logger.warning(f"Unknown object entity: {entity_id}, Type: '{mob_type}', With data: {data}")
+            if object_type:
+                _logger.warning(f"Unknown object entity: {entity_id}, Type: '{object_type}', With data: {data}")
             return mob_entity
 
     # ============================== Packet Parsing ==============================
@@ -876,15 +876,14 @@ class ConnectionState:
 
         self._dispatch('respawn', dimension, difficulty, gamemode, level_type)
 
-    # MOB / Player only
-
     async def parse_0x25(self, buffer: protocol.ProtocolBuffer) -> None:
         """Entity (Packet ID: 0x25)"""
         entity_id = protocol.read_varint(buffer)
 
-        """print('entity', {
-            'entity_id': entity_id
-        })"""
+        if entity_id in self.entities:
+            self._dispatch('entity_keep_alive', self.entities[entity_id])
+        else:
+            _logger.warning(f"Entity keep-alive received for untracked entity ID {entity_id}")
 
     async def parse_0x05(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Player (Packet ID: 0x05)"""
@@ -1092,10 +1091,10 @@ class ConnectionState:
         entity_id = protocol.read_int(buffer)
         status = protocol.read_byte(buffer)
 
-        """print('entity_status', {
-            'entity_id': entity_id,
-            'status': status,
-        })"""
+        if entity_id in self.entities:
+            self._dispatch('entity_status', entity_id, status)
+        else:
+            _logger.warning(f"Unknown entity ID: '{entity_id}', with status: {status}")
 
     # Object
     async def parse_0x00(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1129,11 +1128,11 @@ class ConnectionState:
         position = protocol.read_position(buffer)
         direction = protocol.read_byte(buffer)
 
-        entity = self._create_object_entity(9, entity_id, entity_uuid, math.Vector3D(*position),
+        entity = self._create_object_entity(83, entity_id, entity_uuid, math.Vector3D(*position),
                                             math.Rotation(0, 0), direction)
         entity.set_painting_type(title)
         self.entities[entity_id] = entity
-        print('spawn_painting', entity)
+        self._dispatch('spawn_painting', entity)
 
     async def parse_0x02(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Global Entity (Packet ID: 0x02)"""
@@ -1143,11 +1142,10 @@ class ConnectionState:
         y = protocol.read_double(buffer)
         z = protocol.read_double(buffer)
 
-        """print('spawn_global_entity', {
-            'entity_id': entity_id,
-            'type': entity_type,  # 1 = thunderbolt
-            'position': (x, y, z)
-        })"""
+        entity = self._create_object_entity(200, entity_id, '00000000-0000-0000-0000-000000000000',
+                                            math.Vector3D(x, y, z),
+                                            math.Rotation(0, 0), entity_type)
+        self._dispatch('spawn_global_entity', entity)
 
     async def parse_0x01(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Experience Orb (Packet ID: 0x01)"""
@@ -1157,9 +1155,9 @@ class ConnectionState:
         z = protocol.read_double(buffer)
         count = protocol.read_short(buffer)
 
-        """print('spawn_experience_orb', {
-            'entity_id': entity_id,
-            'position': (x, y, z),
-            'count': count
-        })"""
+        entity = self._create_object_entity(69, entity_id, '00000000-0000-0000-0000-000000000000',
+                                            math.Vector3D(x, y, z),
+                                            math.Rotation(0, 0), count)
+        self.entities[entity_id] = entity
+        self._dispatch('spawn_experience_orb', entity)
 
