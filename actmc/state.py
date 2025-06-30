@@ -360,7 +360,7 @@ class ConnectionState:
                            uuid: str,
                            position: math.Vector3D[float],
                            rotation: math.Rotation,
-                           metadata: Dict[int, Dict[str, Any]]) -> entities.entity.Entity:
+                           metadata: Dict[int, Dict[str, Any]]) -> Any:
         entity_class = MOB_ENTITY_TYPES.get(mob_type)
         if entity_class:
             return entity_class(entity_id, uuid, position, rotation, metadata)
@@ -376,7 +376,7 @@ class ConnectionState:
                            uuid: str,
                            position: math.Vector3D[float],
                            rotation: math.Rotation,
-                           data: int) -> entities.entity.Entity:
+                           data: int) -> Any:
         entity = OBJECT_ENTITY_TYPES.get(mob_type)
         if entity:
             if isinstance(entity, dict):
@@ -1129,11 +1129,11 @@ class ConnectionState:
         position = protocol.read_position(buffer)
         direction = protocol.read_byte(buffer)
 
-        """print('spawn_painting', {'entity_id': entity_id,
-                                                  'uuid': entity_uuid,
-                                                  'title': title,
-                                                  'pos': position,
-                                                  'direction': direction})"""
+        entity = self._create_object_entity(9, entity_id, entity_uuid, math.Vector3D(*position),
+                                            math.Rotation(0, 0), direction)
+        entity.set_painting_type(title)
+        self.entities[entity_id] = entity
+        print('spawn_painting', entity)
 
     async def parse_0x02(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Global Entity (Packet ID: 0x02)"""
