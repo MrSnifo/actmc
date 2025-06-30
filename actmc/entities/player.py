@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-
 from .entity import Living
-
 
 class Player(Living):
     """Player entity extending Living."""

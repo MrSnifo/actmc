@@ -1,40 +1,16 @@
-"""
-The MIT License (MIT)
-
-Copyright (c) 2025-present Snifo
-
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
 from __future__ import annotations
 
 from .entity import BaseEntity
 from ..types.entities import block
-
-from .entity import Entity
 from ..math import Vector3D
 from typing import TYPE_CHECKING
 from ..ui.chat import Message
 
+__all__ = ('Banner', 'Beacon', 'Sign', 'MobSpawner', 'Skull', 'StructureBlock', 'EndGateway', 'ShulkerBox', 'Bed',
+           'FlowerPot')
+
 if TYPE_CHECKING:
     from typing import List, Optional, Dict, Any, Literal, ClassVar
-
 
 class Banner(BaseEntity[str]):
     """
@@ -80,7 +56,6 @@ class Banner(BaseEntity[str]):
     def color_name(self) -> str:
         """Get the color name for the base color."""
         return self.COLOR_NAMES.get(self.base, 'unknown')
-
 
 class Beacon(BaseEntity[str]):
     """
@@ -142,7 +117,6 @@ class Beacon(BaseEntity[str]):
         """Get the name of the secondary effect."""
         return self.EFFECT_NAMES.get(self.secondary, 'unknown')
 
-
 class Sign(BaseEntity[str]):
     """
     Represents a sign block entity in Minecraft.
@@ -182,7 +156,6 @@ class Sign(BaseEntity[str]):
     def is_empty(self) -> bool:
         """Check if all text lines are empty."""
         return all(not str(line).strip() for line in self.all_text_lines)
-
 
 class MobSpawner(BaseEntity[str]):
     """
@@ -255,7 +228,6 @@ class MobSpawner(BaseEntity[str]):
         """Check if spawner has multiple spawn potentials."""
         return self.spawn_potentials is not None and len(self.spawn_potentials) > 0
 
-
 class Skull(BaseEntity[str]):
     """
     Represents a skull block entity in Minecraft.
@@ -314,7 +286,6 @@ class Skull(BaseEntity[str]):
 
     def __repr__(self) -> str:
         return f"<Skull id={self.id} type={self.skull_type} rotation={self.rotation}>"
-
 
 class StructureBlock(BaseEntity[str]):
     """
@@ -398,7 +369,6 @@ class StructureBlock(BaseEntity[str]):
         """Calculate the volume of the structure."""
         return self.size.x * self.size.y * self.size.z
 
-
 class EndGateway(BaseEntity[str]):
     """
     Represents an end gateway block entity in Minecraft.
@@ -431,7 +401,6 @@ class EndGateway(BaseEntity[str]):
         """Check if end gateway has an exit portal set."""
         return self.exit_portal is not None
 
-
 class ShulkerBox(BaseEntity[str]):
     """
     Represents a shulker box block entity in Minecraft.
@@ -458,7 +427,6 @@ class ShulkerBox(BaseEntity[str]):
         """Check if shulker box has any data."""
         return self.raw_data is not None
 
-
 class Bed(BaseEntity[str]):
     """
     Represents a bed block entity in Minecraft.
@@ -484,7 +452,6 @@ class Bed(BaseEntity[str]):
 
     def __repr__(self) -> str:
         return f"<Bed id={self.id} color={self.color}>"
-
 
 class FlowerPot(BaseEntity[str]):
     """
@@ -523,52 +490,3 @@ class FlowerPot(BaseEntity[str]):
     def __repr__(self) -> str:
         return f"<FlowerPot item={self.item}, data={self.data}>"
 
-class FallingBlock(Entity):
-    """Falling block entity extending Entity."""
-    __slots__ = ()
-
-    @property
-    def spawn_position(self) -> Any:
-        """Spawn position from metadata index 6."""
-        return self.get_metadata_value(6)
-
-    @property
-    def has_spawn_position(self) -> bool:
-        """Whether spawn position data is available."""
-        return self.spawn_position is not None
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class TNTPrimed(Entity):
-    """Primed TNT entity extending Entity."""
-    __slots__ = ()
-
-    @property
-    def fuse_time(self) -> int:
-        """Fuse time in ticks from metadata index 6."""
-        return int(self.get_metadata_value(6, 80))
-
-    @property
-    def seconds_until_explosion(self) -> float:
-        """Get seconds until explosion (assuming 20 ticks per second)."""
-        return self.fuse_time / 20.0
-
-    @property
-    def is_about_to_explode(self) -> bool:
-        """Whether TNT is about to explode (less than 1 second)."""
-        return self.fuse_time < 20
-
-    @property
-    def is_critical(self) -> bool:
-        """Whether TNT is in critical explosion phase (less than 0.5 seconds)."""
-        return self.fuse_time < 10
-
-    @property
-    def explosion_percentage(self) -> float:
-        """Percentage of fuse time elapsed (0.0 to 1.0)."""
-        return max(0.0, (80 - self.fuse_time) / 80.0)
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"

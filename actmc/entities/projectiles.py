@@ -1,146 +1,143 @@
 from __future__ import annotations
 
-from typing import Any, Optional
-from .entity import Entity, Projectile
+from typing import Dict, Any, Optional
+from .entity import Entity
 
+__all__ = ('Projectile', 'Arrow', 'TippedArrow', 'SpectralArrow', 'Snowball', 'Egg', 'Potion', 'ThrownExpBottle',
+           'ThrownEnderpearl', 'EyeOfEnderSignal', 'Fireball', 'SmallFireball', 'DragonFireball', 'WitherSkull',
+           'ShulkerBullet', 'LlamaSpit')
 
-class Snowball(Projectile):
-    """Snowball projectile entity extending Projectile."""
+class Projectile(Entity):
+    """Projectile entity extending Entity."""
     __slots__ = ()
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Egg(Projectile):
-    """Egg projectile entity extending Projectile."""
+class Arrow(Projectile):
+    """Abstract base class for arrow projectiles."""
     __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Potion(Projectile):
-    """Thrown potion projectile entity extending Projectile."""
-    __slots__ = ()
-
-    @property
-    def potion_item(self) -> Optional[Any]:
-        """Potion item data from metadata index 6."""
-        return self.get_metadata_value(6)
-
-    @property
-    def has_potion(self) -> bool:
-        """Whether the potion has an item equipped."""
-        return self.potion_item is not None
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Arrow(Entity):
-    """Arrow entity extending Entity (abstract base for TippedArrow and Spectral Arrow)."""
-    __slots__ = ()
-
-    @property
-    def arrow_bit_mask(self) -> int:
-        """Arrow bit mask flags from metadata index 6."""
-        return int(self.get_metadata_value(6, 0))
+    ENTITY_TYPE = "minecraft:arrow"
 
     @property
     def is_critical(self) -> bool:
-        """Whether arrow is critical (bit 0)."""
-        return bool(self.arrow_bit_mask & 0x01)
+        """
+        Whether the arrow is critical (deals extra damage).
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
+        Returns
+        -------
+        bool
+            True if arrow is critical, False otherwise
+        """
+        arrow_flags = int(self.get_metadata_value(6, 0))
+        return bool(arrow_flags & 0x01)
 
 class TippedArrow(Arrow):
-    """Tipped arrow entity extending Arrow (used for both tipped and regular arrows)."""
+    """Tipped arrow projectile entity. """
     __slots__ = ()
+    ENTITY_TYPE = "minecraft:arrow"
 
     @property
     def color(self) -> int:
-        """Tipped arrow color from metadata index 7."""
+        """
+        Particle color for tipped arrows.
+
+        Returns
+        -------
+        int
+            Color value (-1 for no particles, regular arrows)
+        """
         return int(self.get_metadata_value(7, -1))
 
     @property
     def is_tipped(self) -> bool:
-        """Whether arrow is tipped (has particles)."""
+        """
+        Whether this is a tipped arrow with potion effects.
+
+        Returns
+        -------
+        bool
+            True if arrow has potion effects, False for regular arrows
+        """
         return self.color != -1
 
-    @property
-    def has_particles(self) -> bool:
-        """Whether arrow shows tipped arrow particles."""
-        return self.is_tipped
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Fireball(Entity):
-    """Fireball entity extending Entity (ghast fireball)."""
+class SpectralArrow(Arrow):
+    """
+    Spectral arrow projectile entity."""
     __slots__ = ()
+    ENTITY_TYPE = "minecraft:spectral_arrow"
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
+class Snowball(Projectile):
+    """Snowball projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:snowball"
 
+class Egg(Projectile):
+    """Thrown egg projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:egg"
+
+class Potion(Projectile):
+    """Thrown potion projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:potion"
+
+    @property
+    def potion_item(self) -> Optional[Dict[str, Any]]:
+        """
+        The potion item being thrown.
+
+        Returns
+        -------
+        Optional[Dict[str, Any]]
+            Slot data for the potion item, None if empty
+        """
+        item_data = self.get_metadata_value(6)
+        return item_data if item_data else None
+
+class ThrownExpBottle(Projectile):
+    """Thrown experience bottle projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:xp_bottle"
+
+class ThrownEnderpearl(Projectile):
+    """Thrown ender pearl projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:ender_pearl"
+
+class EyeOfEnderSignal(Projectile):
+    """Eye of Ender signal projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:eye_of_ender_signal"
+
+class Fireball(Projectile):
+    """Base fireball projectile entity. """
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:fireball"
+
+class SmallFireball(Fireball):
+    """ Small fireball projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:small_fireball"
+
+class DragonFireball(Projectile):
+    """Dragon fireball projectile entity."""
+    __slots__ = ()
+    ENTITY_TYPE = "minecraft:dragon_fireball"
 
 class WitherSkull(Fireball):
-    """Wither skull projectile entity extending Fireball."""
+    """Wither skull projectile entity."""
     __slots__ = ()
-
-    @property
-    def invulnerable(self) -> bool:
-        """Whether wither skull is invulnerable from metadata index 6."""
-        return bool(self.get_metadata_value(6, False))
+    ENTITY_TYPE = "minecraft:wither_skull"
 
     @property
     def is_invulnerable(self) -> bool:
-        """Whether wither skull is invulnerable."""
-        return self.invulnerable
+        """Whether the wither skull is invulnerable to damage."""
+        return bool(self.get_metadata_value(6, False))
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Fireworks(Entity):
-    """Fireworks rocket entity extending Entity."""
+class ShulkerBullet(Projectile):
+    """Shulker bullet projectile entity."""
     __slots__ = ()
+    ENTITY_TYPE = "minecraft:shulker_bullet"
 
-    @property
-    def firework_info(self) -> Optional[Any]:
-        """Firework item data from metadata index 6."""
-        return self.get_metadata_value(6)
-
-    @property
-    def booster_entity_id(self) -> int:
-        """Booster entity ID from metadata index 7."""
-        return int(self.get_metadata_value(7, 0))
-
-    @property
-    def has_firework_data(self) -> bool:
-        """Whether firework has data."""
-        return self.firework_info is not None
-
-    @property
-    def is_elytra_boost(self) -> bool:
-        """Whether firework is used for elytra boosting."""
-        return self.booster_entity_id != 0
-
-    @property
-    def boosted_entity_id(self) -> int:
-        """Entity ID that used this firework for elytra boosting."""
-        return self.booster_entity_id
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class LlamaSpit(Entity):
-    """Llama spit projectile entity extending Entity."""
+class LlamaSpit(Projectile):
+    """Llama spit projectile entity."""
     __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
+    ENTITY_TYPE = "minecraft:llama_spit"

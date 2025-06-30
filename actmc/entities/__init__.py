@@ -1,13 +1,20 @@
-from . import entity
-from . import block
-from . import player
-from . import misc
-from . import bosses
-from . import projectiles
+from . import ambient
 from . import animals
-from . import vehicles
+from . import aquatic
+from . import block
+from . import dragons
+from . import entity
+from . import flying
+from . import golems
+from . import hanging
+from . import illagers
+from . import misc
 from . import monsters
-
+from . import projectiles
+from . import skeletons
+from . import tameable
+from . import vehicles
+from . import villagers
 
 BLOCK_ENTITY_TYPES = {
     'minecraft:bed': block.Bed,
@@ -23,84 +30,93 @@ BLOCK_ENTITY_TYPES = {
 }
 
 MOB_ENTITY_TYPES = {
-    90: animals.Pig,
-    91: animals.Sheep,
-    # 92: animals.Cow,
-    # 93: animals.Chicken,
-    94: animals.Squid,
-    95: animals.Wolf,
-    # 96: animals.Mooshroom,
-    # 97: animals.Snowman,
-    98: animals.Ocelot,
-    # 99: animals.IronGolem,
-    100: animals.Horse,
-    101: animals.Rabbit,
-    102: animals.PolarBear,
-    103: animals.Llama,
-    105: animals.Parrot,
     4: monsters.ElderGuardian,
-    5: monsters.WitherSkeleton,
-    6: monsters.Stray,
+    5: skeletons.WitherSkeleton,
+    6: skeletons.Stray,
     23: monsters.Husk,
     27: monsters.ZombieVillager,
-    34: monsters.EvocationIllager,
+    28: animals.SkeletonHorse,
+    29: animals.ZombieHorse,
+    31: animals.Donkey,
+    32: animals.Mule,
+    34: illagers.EvocationIllager,
     35: monsters.Vex,
-    36: monsters.VindicationIllager,
-    37: monsters.IllusionIllager,
+    36: illagers.VindicationIllager,
+    37: illagers.IllusionIllager,
     50: monsters.Creeper,
-    51: monsters.Skeleton,
+    51: skeletons.Skeleton,
     52: monsters.Spider,
-    # 53: monsters.Giant,
+    53: monsters.Giant,
     54: monsters.Zombie,
     55: monsters.Slime,
-    # 56: monsters.Ghast,
-    # 57: monsters.ZombiePigman,
+    56: flying.Ghast,
+    57: monsters.PigZombie,
     58: monsters.Enderman,
-    # 59: monsters.CaveSpider,
+    59: monsters.CaveSpider,
     60: monsters.Silverfish,
     61: monsters.Blaze,
-    # 62: monsters.MagmaCube,
-    65: animals.Bat,
+    62: monsters.LavaSlime,
+    63: dragons.EnderDragon,
+    64: monsters.WitherBoss,
+    65: ambient.Bat,
     66: monsters.Witch,
     67: monsters.Endermite,
     68: monsters.Guardian,
     69: monsters.Shulker,
-    120: monsters.Villager,
-    63: bosses.EnderDragon,
-    64: bosses.Wither,
+    90: animals.Pig,
+    91: animals.Sheep,
+    92: animals.Cow,
+    93: animals.Chicken,
+    94: aquatic.Squid,
+    95: tameable.Wolf,
+    96: animals.MushroomCow,
+    97: golems.Snowman,
+    98: tameable.Ocelot,
+    99: golems.IronGolem,
+    100: animals.Horse,
+    101: animals.Rabbit,
+    102: animals.PolarBear,
+    103: animals.Llama,
+    105: tameable.Parrot,
+    120: villagers.Villager,
 }
-
 
 OBJECT_ENTITY_TYPES = {
     1: vehicles.Boat,
-    10: {0: vehicles.Minecart, 1: vehicles.MinecartChest, 2: vehicles.MinecartFurnace,
-         3: vehicles.MinecartTNT, 4: vehicles.MinecartSpawner, 5: vehicles.MinecartHopper,
-         6: vehicles.MinecartCommandBlock},
-    50: block.TNTPrimed,
-    51: misc.EnderCrystal,
-    # 2: misc.ItemStack,
+    2: misc.Item,
     3: misc.AreaEffectCloud,
-    70: block.FallingBlock,
-    71: misc.ItemFrame,
-    # 72: objects.EyeOfEnder,
-    # 73: objects.ThrownPotion,
-    # 75: objects.ThrownExpBottle,
-    # 76: objects.FireworkRocket,
-    # 77: objects.LeashKnot,
-    # 78: objects.ArmorStand,
-    60: projectiles.TippedArrow,  # also covers regular arrow
+    10: {
+        0: vehicles.MinecartRideable,
+        1: vehicles.MinecartChest,
+        2: vehicles.MinecartFurnace,
+        3: vehicles.MinecartTNT,
+        4: vehicles.MinecartSpawner,
+        5: vehicles.MinecartHopper,
+        6: vehicles.MinecartCommandBlock,
+    },
+    50: misc.TNTPrimed,
+    51: misc.EnderCrystal,
+    60: projectiles.TippedArrow,
     61: projectiles.Snowball,
     62: projectiles.Egg,
-    # 63: projectiles.GhastFireball,
-    # 64: projectiles.BlazeFireCharge,
-    # 65: projectiles.ThrownEnderpearl,
+    63: projectiles.Fireball,
+    64: projectiles.SmallFireball,
+    65: projectiles.ThrownEnderpearl,
     66: projectiles.WitherSkull,
-    # 67: projectiles.ShulkerBullet,
+    67: projectiles.ShulkerBullet,
     68: projectiles.LlamaSpit,
-    # 90: projectiles.FishingHook,
-    # 91: projectiles.SpectralArrow,
-    # 93: projectiles.DragonFireball,
-    # 79: objects.EvocationFangs,
+    70: misc.FallingBlock,
+    71: hanging.ItemFrame,
+    72: projectiles.EyeOfEnderSignal,
+    73: projectiles.Potion,
+    75: projectiles.ThrownExpBottle,
+    76: misc.FireworksRocket,
+    77: misc.LeashKnot,
+    78: misc.ArmorStand,
+    79: misc.EvocationFangs,
+    90: misc.FishingHook,
+    91: projectiles.SpectralArrow,
+    93: projectiles.DragonFireball,
+    9: hanging.Painting,
+    18: hanging.ItemFrame,
 }
-
-

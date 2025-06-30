@@ -1024,8 +1024,6 @@ class ConnectionState:
             entity.rotation.yaw = head_yaw
             self._dispatch('entity_head_look', entity)
 
-
-
     async def parse_0x03(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Mob (Packet ID: 0x03)"""
         entity_id = protocol.read_varint(buffer)
@@ -1099,9 +1097,7 @@ class ConnectionState:
             'status': status,
         })"""
 
-
     # Object
-
     async def parse_0x00(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Object (Packet ID: 0x00)"""
         entity_id = protocol.read_varint(buffer)

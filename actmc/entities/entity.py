@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING, Dict, Any, Union, TypeVar, Generic, Optional
 if TYPE_CHECKING:
     from ..math import Vector3D, Rotation
 
-T = TypeVar('T', int, float, str, default=int)
+__all__ = ('BaseEntity', 'Entity', 'Living', 'Insentient', 'Creature', 'Monster')
 
+T = TypeVar('T', int, str, default=int)
 
 class BaseEntity(Generic[T]):
     """
@@ -33,7 +34,6 @@ class BaseEntity(Generic[T]):
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.id}>"
 
-
 class Entity(BaseEntity[int]):
     """
     Base Entity class with common metadata fields and attributes.
@@ -52,6 +52,7 @@ class Entity(BaseEntity[int]):
         Raw metadata dictionary from server
     """
     __slots__ = ('uuid', 'position', 'rotation', 'raw_metadata', 'properties')
+    ENTITY_TYPE = None
 
     def __init__(self, entity_id: int, uuid: str, position: Vector3D[float], rotation: Rotation,
                  metadata: Dict[int, Any]) -> None:
@@ -63,7 +64,7 @@ class Entity(BaseEntity[int]):
         self.properties: Dict[str, Dict[str, Any]] = {}
 
     @property
-    def bit_mask(self) -> int:
+    def _bit_mask(self) -> int:
         """Entity bit mask flags from metadata index 0."""
         return int(self.get_metadata_value(0, 0))
 
@@ -200,44 +201,35 @@ class Entity(BaseEntity[int]):
     @property
     def on_fire(self) -> bool:
         """Whether entity is on fire (bit 0)."""
-        return bool(self.bit_mask & 0x01)
+        return bool(self._bit_mask & 0x01)
 
     @property
     def crouched(self) -> bool:
         """Whether entity is crouching (bit 1)."""
-        return bool(self.bit_mask & 0x02)
+        return bool(self._bit_mask & 0x02)
 
     @property
     def sprinting(self) -> bool:
         """Whether entity is sprinting (bit 3)."""
-        return bool(self.bit_mask & 0x08)
+        return bool(self._bit_mask & 0x08)
 
     @property
     def invisible(self) -> bool:
         """Whether entity is invisible (bit 5)."""
-        return bool(self.bit_mask & 0x20)
+        return bool(self._bit_mask & 0x20)
 
     @property
     def glowing(self) -> bool:
         """Whether entity is glowing (bit 6)."""
-        return bool(self.bit_mask & 0x40)
+        return bool(self._bit_mask & 0x40)
 
     @property
     def flying_with_elytra(self) -> bool:
         """Whether entity is flying with elytra (bit 7)."""
-        return bool(self.bit_mask & 0x80)
+        return bool(self._bit_mask & 0x80)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Projectile(Entity):
-    """Projectile entity extending Entity."""
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
 
 class Living(Entity):
     """Living entity extending Entity."""
@@ -278,125 +270,29 @@ class Living(Entity):
         """Which hand is active (0=main, 1=off)."""
         return (self.hand_states & 0x02) >> 1
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, health={self.health}>"
-
-
 class Insentient(Living):
-    """Insentient entity extending Living."""
+    """Insentient entity extending Living (base for mobs with AI)."""
     __slots__ = ()
 
     @property
-    def insentient_bit_mask(self) -> int:
+    def _insentient_bit_mask(self) -> int:
         """Insentient-specific bit mask from metadata index 11."""
         return int(self.get_metadata_value(11, 0))
 
     @property
     def no_ai(self) -> bool:
         """Whether AI is disabled (bit 0)."""
-        return bool(self.insentient_bit_mask & 0x01)
+        return bool(self._insentient_bit_mask & 0x01)
 
     @property
     def left_handed(self) -> bool:
         """Whether entity is left-handed (bit 1)."""
-        return bool(self.insentient_bit_mask & 0x02)
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, health={self.health}>"
-
-
-class Ambient(Insentient):
-    """Ambient entity extending Insentient."""
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
+        return bool(self._insentient_bit_mask & 0x02)
 
 class Creature(Insentient):
     """Creature entity extending Insentient."""
     __slots__ = ()
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
-class Ageable(Creature):
-    """Ageable entity extending Creature."""
-    __slots__ = ()
-
-    @property
-    def is_baby(self) -> bool:
-        """Whether entity is a baby from metadata index 12."""
-        return bool(self.get_metadata_value(12, False))
-
-    def __repr__(self) -> str:
-        baby_str = " (baby)" if self.is_baby else ""
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}{baby_str}>"
-
-
-class Animal(Ageable):
-    """Animal entity extending Ageable."""
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        baby_str = " (baby)" if self.is_baby else ""
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}{baby_str}>"
-
-
-class TameableAnimal(Animal):
-    """Tameable animal entity extending Animal."""
-    __slots__ = ()
-
-    @property
-    def tameable_bit_mask(self) -> int:
-        """Tameable-specific bit mask from metadata index 13."""
-        return int(self.get_metadata_value(13, 0))
-
-    @property
-    def owner_uuid(self) -> Optional[str]:
-        """Owner UUID from metadata index 14."""
-        owner = self.get_metadata_value(14)
-        return str(owner) if owner is not None else None
-
-    @property
-    def is_sitting(self) -> bool:
-        """Whether animal is sitting (bit 0)."""
-        return bool(self.tameable_bit_mask & 0x01)
-
-    @property
-    def is_angry(self) -> bool:
-        """Whether animal is angry (bit 1)."""
-        return bool(self.tameable_bit_mask & 0x02)
-
-    @property
-    def is_tamed(self) -> bool:
-        """Whether animal is tamed (bit 2)."""
-        return bool(self.tameable_bit_mask & 0x04)
-
-    @property
-    def has_owner(self) -> bool:
-        """Whether animal has an owner."""
-        return self.owner_uuid is not None
-
-    def __repr__(self) -> str:
-        tamed_str = " (tamed)" if self.is_tamed else ""
-        sitting_str = " (sitting)" if self.is_sitting else ""
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}{tamed_str}{sitting_str}>"
-
-
-class Golem(Creature):
-    """Golem entity extending Creature."""
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
-
 class Monster(Creature):
     """Monster entity extending Creature."""
     __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}>"
-
