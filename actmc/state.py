@@ -75,6 +75,8 @@ class ConnectionState:
         self.server_difficulty: Optional[str] = None
         self.server_max_players: Optional[int] = None
         self.server_world_type: Optional[str] = None
+        self.server_world_age = 0
+        self.server_time_of_day = 0
 
         # World state
         self.chunks: Dict[math.Vector2D, Chunk] = {}
@@ -1080,7 +1082,6 @@ class ConnectionState:
         """Destroy Entities (Packet ID: 0x32)"""
         count = protocol.read_varint(buffer)
         entity_ids = [protocol.read_varint(buffer) for _ in range(count)]
-
         destroyed = {eid: self.entities.pop(eid, None) for eid in entity_ids if eid in self.entities}
 
         if destroyed:
@@ -1133,6 +1134,16 @@ class ConnectionState:
         entity.set_painting_type(title)
         self.entities[entity_id] = entity
         self._dispatch('spawn_painting', entity)
+
+    async def parse_0x47(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Time Update (Packet ID: 0x47)"""
+        world_age = protocol.read_long(buffer)
+        time_of_day = protocol.read_long(buffer)
+        self.server_world_age = world_age
+        self.server_time_of_day = time_of_day
+
+        self._dispatch('time_update', world_age, time_of_day)
+
 
     async def parse_0x02(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Global Entity (Packet ID: 0x02)"""
