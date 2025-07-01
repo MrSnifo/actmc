@@ -91,14 +91,7 @@ class Entity(BaseEntity[int]):
 
     @property
     def _bit_mask(self) -> int:
-        """
-        Entity bit mask flags.
-
-        Returns
-        -------
-        int
-            Bit mask containing entity state flags
-        """
+        """Entity bit mask flags."""
         return int(self.get_metadata_value(0, 0))
 
     @property
@@ -202,21 +195,7 @@ class Entity(BaseEntity[int]):
 
     @staticmethod
     def _calculate_final_value(base_value: float, modifiers: Dict[str, Dict[str, Union[int, float]]]) -> float:
-        """
-        Calculate final attribute value with modifiers.
-
-        Parameters
-        ----------
-        base_value: float
-            Base attribute value
-        modifiers: Dict[str, Dict[str, Union[int, float]]]
-            Attribute modifiers with operation types and amounts after base
-
-        Returns
-        -------
-        float
-            Final calculated attribute value after applying all modifiers
-        """
+        """Calculate final attribute value with modifiers."""
         if not modifiers:
             return base_value
 
@@ -509,14 +488,7 @@ class Insentient(Living):
 
     @property
     def _insentient_bit_mask(self) -> int:
-        """
-        Insentient-specific bit mask.
-
-        Returns
-        -------
-        int
-            Bit mask containing AI and behavioral flags
-        """
+        """Insentient-specific bit mask."""
         return int(self.get_metadata_value(11, 0))
 
     @property

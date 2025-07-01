@@ -54,7 +54,7 @@ class SpellcasterIllager(AbstractIllager):
 
     __slots__ = ()
 
-    @propertyf
+    @property
     def spell(self) -> int:
         """
         Current spell.

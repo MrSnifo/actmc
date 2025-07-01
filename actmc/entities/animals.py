@@ -59,14 +59,7 @@ class AbstractHorse(Ageable):
 
     @property
     def _horse_bit_mask(self) -> int:
-        """
-        Internal bit mask containing horse-specific flags.
-
-        Returns
-        -------
-        int
-            Bit mask value from metadata index 13.
-        """
+        """Internal bit mask containing horse-specific flags."""
         return int(self.get_metadata_value(13, 0))
 
     @property
@@ -234,14 +227,7 @@ class Sheep(Ageable):
 
     @property
     def _sheep_bit_mask(self) -> int:
-        """
-        Internal bit mask containing sheep-specific flags and color data.
-
-        Returns
-        -------
-        int
-            Bit mask value from metadata index 13.
-        """
+        """Internal bit mask containing sheep-specific flags and color data."""
         return int(self.get_metadata_value(13, 0))
 
     @property

@@ -40,14 +40,7 @@ class TameableAnimal(Creature):
 
     @property
     def _tameable_bit_mask(self) -> int:
-        """
-        Tameable-specific bit mask.
-
-        Returns
-        -------
-        int
-            The bit mask containing tameable state flags.
-        """
+        """Tameable-specific bit mask."""
         return int(self.get_metadata_value(13, 0))
 
     @property

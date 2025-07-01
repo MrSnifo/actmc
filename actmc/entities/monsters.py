@@ -128,14 +128,7 @@ class Spider(Monster):
 
     @property
     def _spider_bit_mask(self) -> int:
-        """
-        Spider-specific bit mask.
-
-        Returns
-        -------
-        int
-            The spider's bit mask value.
-        """
+        """Spider-specific bit mask."""
         return int(self.get_metadata_value(12, 0))
 
     @property
@@ -352,7 +345,7 @@ class Slime(Monster):
 
 class LavaSlime(Slime):
     """
-    Lava Slime (Magma Cube) entity extending Slime.
+    Lava Slime (Magma Cube).
 
     Attributes
     ----------
@@ -388,14 +381,7 @@ class Blaze(Monster):
 
     @property
     def _blaze_bit_mask(self) -> int:
-        """
-        Blaze-specific bit mask.
-
-        Returns
-        -------
-        int
-            The blaze's bit mask value.
-        """
+        """Blaze-specific bit mask."""
         return int(self.get_metadata_value(12, 0))
 
     @property
@@ -736,14 +722,7 @@ class Vex(Monster):
 
     @property
     def _vex_bit_mask(self) -> int:
-        """
-        Vex-specific bit mask.
-
-        Returns
-        -------
-        int
-            The vex's bit mask value.
-        """
+        """Vex-specific bit mask."""
         return int(self.get_metadata_value(12, 0))
 
     @property
