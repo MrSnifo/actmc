@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from ..types.entities import block
+from ..types import entities
 from typing import TYPE_CHECKING
 from .entity import BaseEntity
 from ..ui.chat import Message
@@ -49,7 +49,7 @@ class Banner(BaseEntity[str]):
         12: 'brown', 13: 'green', 14: 'red', 15: 'black'
     }
 
-    def __init__(self, entity_id: str, data: block.Banner) -> None:
+    def __init__(self, entity_id: str, data: entities.Banner) -> None:
         super().__init__(entity_id)
         self._raw_data = data
 
@@ -66,13 +66,13 @@ class Banner(BaseEntity[str]):
         return self._raw_data['Base']
 
     @property
-    def patterns(self) -> List[block.BannerPattern]:
+    def patterns(self) -> List[entities.BannerPattern]:
         """
         List of patterns applied to the banner.
 
         Returns
         -------
-        List[block.BannerPattern]
+        List[entities.BannerPattern]
             Collection of banner patterns with their configurations.
         """
         return self._raw_data.get('Patterns', [])
@@ -126,7 +126,7 @@ class Beacon(BaseEntity[str]):
     EFFECT_NAMES: ClassVar[Dict[int, str]] = {1: 'speed', 3: 'haste', 5: 'strength', 8: 'jump_boost',
                                               10: 'regeneration', 11: 'resistance'}
 
-    def __init__(self, entity_id: str, data: block.Beacon) -> None:
+    def __init__(self, entity_id: str, data: entities.Beacon) -> None:
         super().__init__(entity_id)
         self._raw_data = data
 
@@ -246,7 +246,7 @@ class Sign(BaseEntity[str]):
     """Represents a sign block entity."""
     __slots__ = ('_raw_data', '_text_cache')
 
-    def __init__(self, entity_id: str, data: block.Sign) -> None:
+    def __init__(self, entity_id: str, data: entities.Sign) -> None:
         super().__init__(entity_id)
         self._raw_data = data
         self._text_cache = {}
@@ -339,7 +339,7 @@ class MobSpawner(BaseEntity[str]):
     """Represents a mob spawner block entity."""
     __slots__ = ('_raw_data',)
 
-    def __init__(self, entity_id: str, data: block.MobSpawner) -> None:
+    def __init__(self, entity_id: str, data: entities.MobSpawner) -> None:
         super().__init__(entity_id)
         self._raw_data = data
 
@@ -428,25 +428,25 @@ class MobSpawner(BaseEntity[str]):
         return self._raw_data.get('SpawnRange', 4)
 
     @property
-    def spawn_data(self) -> Optional[block.MobSpawnerEntityData]:
+    def spawn_data(self) -> Optional[entities.MobSpawnerEntityData]:
         """
         Data for the entity to spawn.
 
         Returns
         -------
-        Optional[block.MobSpawnerEntityData]
+        Optional[entities.MobSpawnerEntityData]
             Entity configuration data if set, None otherwise.
         """
         return self._raw_data.get('SpawnData')
 
     @property
-    def spawn_potentials(self) -> Optional[List[block.MobSpawnerSpawnPotentialEntry]]:
+    def spawn_potentials(self) -> Optional[List[entities.MobSpawnerSpawnPotentialEntry]]:
         """
         List of potential entities to spawn with weights.
 
         Returns
         -------
-        Optional[List[block.MobSpawnerSpawnPotentialEntry]]
+        Optional[List[entities.MobSpawnerSpawnPotentialEntry]]
             List of spawn potential entries with weights, None if not configured.
         """
         return self._raw_data.get('SpawnPotentials')
@@ -504,7 +504,7 @@ class Skull(BaseEntity[str]):
         5: 'dragon'
     }
 
-    def __init__(self, entity_id: str, data: block.Skull) -> None:
+    def __init__(self, entity_id: str, data: entities.Skull) -> None:
         super().__init__(entity_id)
         self._raw_data = data
 
@@ -534,13 +534,13 @@ class Skull(BaseEntity[str]):
         return self._raw_data['SkullType']
 
     @property
-    def owner(self) -> Optional[block.SkullOwner]:
+    def owner(self) -> Optional[entities.SkullOwner]:
         """
         Owner information for player heads.
 
         Returns
         -------
-        Optional[block.SkullOwner]
+        Optional[entities.SkullOwner]
             Owner data for player heads, None for non-player skulls.
         """
         return self._raw_data.get('Owner')
@@ -591,7 +591,7 @@ class StructureBlock(BaseEntity[str]):
     """
     __slots__ = ('_raw_data', '_position_cache', '_size_cache')
 
-    def __init__(self, entity_id: str, data: block.StructureBlock) -> None:
+    def __init__(self, entity_id: str, data: entities.StructureBlock) -> None:
         super().__init__(entity_id)
         self._raw_data = data
         self._position_cache = None
@@ -600,12 +600,12 @@ class StructureBlock(BaseEntity[str]):
     @property
     def metadata(self) -> str:
         """
-        Additional metadata for the structure block.
+        Additional metadata for the structure entities.
 
         Returns
         -------
         str
-            Metadata string associated with the structure block.
+            Metadata string associated with the structure entities.
         """
         return self._raw_data['metadata']
 
@@ -684,12 +684,12 @@ class StructureBlock(BaseEntity[str]):
     @property
     def mode(self) -> Literal['SAVE', 'LOAD', 'CORNER', 'DATA']:
         """
-        Current mode of the structure block.
+        Current mode of the structure entities.
 
         Returns
         -------
         Literal['SAVE', 'LOAD', 'CORNER', 'DATA']
-            Operating mode of the structure block.
+            Operating mode of the structure entities.
         """
         return self._raw_data['mode']
 
@@ -701,7 +701,7 @@ class StructureBlock(BaseEntity[str]):
         Returns
         -------
         Vector3D[int]
-            3D coordinate offset relative to the structure block.
+            3D coordinate offset relative to the structure entities.
         """
         if self._position_cache is None:
             self._position_cache = Vector3D(
@@ -822,7 +822,7 @@ class EndGateway(BaseEntity[str]):
 
     __slots__ = ('_raw_data', '_exit_portal_cache')
 
-    def __init__(self, entity_id: str, data: block.EndGateway) -> None:
+    def __init__(self, entity_id: str, data: entities.EndGateway) -> None:
         super().__init__(entity_id)
         self._raw_data = data
         self._exit_portal_cache = None
@@ -925,7 +925,7 @@ class Bed(BaseEntity[str]):
         12: 'brown', 13: 'green', 14: 'red', 15: 'black'
     }
 
-    def __init__(self, entity_id: str, data: block.Bed) -> None:
+    def __init__(self, entity_id: str, data: entities.Bed) -> None:
         super().__init__(entity_id)
         self._raw_data = data
 
@@ -951,7 +951,7 @@ class FlowerPot(BaseEntity[str]):
 
     EMPTY_ITEM: ClassVar[str] = 'minecraft:air'
 
-    def __init__(self, entity_id: str, data: block.FlowerPot) -> None:
+    def __init__(self, entity_id: str, data: entities.FlowerPot) -> None:
         super().__init__(entity_id)
         self._raw_data = data
 

@@ -290,7 +290,6 @@ class User(Player):
         await self._state.send_player_digging(4, Vector3D(0, 0, 0), 0)
 
 
-
     async def swap_item_in_hand(self) -> None:
         """
         Swap item to the second hand.

@@ -505,18 +505,20 @@ class Rotation:
 
     Angles are normalized to the range [-180, 180] degrees.
 
+    Attributes
     ----------
-    pitch: float
-        Pitch angle in degrees, normalized to (-180, 180)
     yaw: float
         Yaw angle in degrees, normalized to (-180, 180)
+    pitch: float
+        Pitch angle in degrees, normalized to (-180, 180)
     """
 
-    __slots__ = ('pitch', 'yaw')
+    __slots__ = ('yaw', 'pitch')
 
-    def __init__(self, pitch: float, yaw: float) -> None:
-        self.pitch = self._normalize_angle(float(pitch))
+    def __init__(self,  yaw: float, pitch: float) -> None:
         self.yaw = self._normalize_angle(float(yaw))
+        self.pitch = self._normalize_angle(float(pitch))
+
 
     @staticmethod
     def _normalize_angle(angle: float) -> float:
@@ -594,7 +596,7 @@ class Rotation:
         Rotation
             Sum of the two rotations
         """
-        return Rotation(self.pitch + other.pitch, self.yaw + other.yaw)
+        return Rotation(self.yaw + other.yaw, self.pitch + other.pitch)
 
     def __sub__(self, other: Rotation) -> Rotation:
         """
@@ -603,15 +605,14 @@ class Rotation:
         Parameters
         ----------
         other: Rotation
-            Rotation to subtract
+            subtract
 
         Returns
         -------
         Rotation
             Difference of the two rotations
         """
-        return Rotation(self.pitch - other.pitch,
-                        self.yaw - other.yaw)
+        return Rotation(self.yaw - other.yaw, self.pitch - other.pitch,)
 
     def __mul__(self, scalar: Union[int, float]) -> Rotation:
         """
@@ -627,7 +628,7 @@ class Rotation:
         Rotation
             Scaled rotation
         """
-        return Rotation(self.pitch * scalar, self.yaw * scalar)
+        return Rotation(self.yaw * scalar, self.pitch * scalar)
 
     def __eq__(self, other: object) -> bool:
         """
@@ -657,4 +658,4 @@ class Rotation:
             String representation
         """
         fmt = lambda n: str(int(n)) if n == int(n) else f"{n:.2f}"
-        return f"<Rotation pitch={fmt(self.pitch)}, yaw={fmt(self.yaw)}>"
+        return f"<Rotation yaw={fmt(self.yaw)}, pitch={fmt(self.pitch)}>"

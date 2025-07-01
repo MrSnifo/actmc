@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Dict, Any, Union, TypeVar, Optional
     from ..math import Vector3D, Rotation
-
     T = TypeVar('T', int, str, default=int)
 
 __all__ = ('BaseEntity', 'Entity', 'Living', 'Insentient', 'Creature')

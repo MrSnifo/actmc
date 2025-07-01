@@ -255,4 +255,4 @@ class Player(Living):
         return self.right_shoulder_entity is not None
 
     def __repr__(self) -> str:
-        return f"<Player id={self.id}, position={self.position}>"
+        return f"<{self.__class__.__name__} id={self.id} score={self.score}>"

@@ -37,6 +37,9 @@ class Item(Entity):
     """
     Item entity representing a dropped item in the world.
 
+    The entity does not include the item data when initially created.
+    The item it holds must be received through a metadata update packet.
+
     Attributes
     ----------
     ENTITY_TYPE: ClassVar[str]
@@ -75,6 +78,7 @@ class Item(Entity):
         """
         return self.item_stack is not None
 
+
 class XPOrb(Entity):
     """
     Experience orb entity.
@@ -107,6 +111,8 @@ class XPOrb(Entity):
 class LightningBolt(Entity):
     """
     Lightning bolt entity.
+
+    This entity is not stored in the entity registry, as it is ephemeral.
 
     Attributes
     ----------

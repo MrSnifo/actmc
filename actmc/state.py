@@ -814,11 +814,6 @@ class ConnectionState:
         flags = protocol.read_ubyte(data)
         teleport_id = protocol.read_varint(data)
 
-        if not hasattr(self.user, 'position'):
-            self.user.position = math.Vector3D(0.0, 0.0, 0.0)
-        if not hasattr(self.user, 'rotation'):
-            self.user.rotation = math.Rotation(0.0, 0.0)
-
         if flags & 0x01:  # relative X
             x += self.user.position.x
         if flags & 0x02:  # relative Y
@@ -887,6 +882,11 @@ class ConnectionState:
         else:
             _logger.warning(f"Entity keep-alive received for untracked entity ID {entity_id}")
 
+    async def parse_0x2a(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Open Sign Editor (Packet ID: 0x2A)"""
+        location = protocol.read_position(buffer)
+        self._dispatch('open_sign_editor', math.Vector3D(*location))
+
     async def parse_0x05(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Player (Packet ID: 0x05)"""
         entity_id = protocol.read_varint(buffer)
@@ -898,7 +898,7 @@ class ConnectionState:
         pitch = protocol.read_angle(buffer)
         metadata = protocol.read_entity_metadata(buffer)
 
-        player = entities.player.Player(entity_id, player_uuid, math.Vector3D(x, y, z), math.Rotation(pitch, yaw),
+        player = entities.player.Player(entity_id, player_uuid, math.Vector3D(x, y, z), math.Rotation(yaw, pitch),
                                         metadata)
         self.entities[entity_id] = player
         self._dispatch('spawn_player', player)
@@ -942,9 +942,19 @@ class ConnectionState:
 
         if entity_id in self.entities:
             self.entities[entity_id].position = math.Vector3D(x, y, z)
-            self.entities[entity_id].rotation = math.Rotation(pitch, yaw)
+            self.entities[entity_id].rotation = math.Rotation(yaw, pitch)
             self._dispatch('entity_teleport', self.entities[entity_id], on_ground)
 
+    async def parse_0x29(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Vehicle Move (Packet ID: 0x29)"""
+        x = protocol.read_double(buffer)
+        y = protocol.read_double(buffer)
+        z = protocol.read_double(buffer)
+        yaw = protocol.read_float(buffer)
+        pitch = protocol.read_float(buffer)
+
+
+        self._dispatch('vehicle_move', math.Vector3D(x, y, z), math.Rotation(yaw, pitch))
 
     async def parse_0x26(self, buffer: protocol.ProtocolBuffer) -> None:
         """Entity Relative Move (Packet ID: 0x26)"""
@@ -997,7 +1007,7 @@ class ConnectionState:
             new_z = current_pos.z + delta.z
 
             entity.position = math.Vector3D(new_x, new_y, new_z)
-            entity.rotation = math.Rotation(pitch, yaw)
+            entity.rotation = math.Rotation(yaw, pitch)
 
             self._dispatch('entity_move_look', entity, delta, on_ground)
 
@@ -1011,7 +1021,7 @@ class ConnectionState:
         # Update entity if it exists
         if entity_id in self.entities:
             entity = self.entities[entity_id]
-            entity.rotation = math.Rotation(pitch, yaw)
+            entity.rotation = math.Rotation(yaw, pitch)
             self._dispatch('entity_look', entity, on_ground)
 
     async def parse_0x36(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1043,9 +1053,9 @@ class ConnectionState:
         metadata = protocol.read_entity_metadata(buffer)
 
         mob_entity = self._create_mob_entity(mob_type, entity_id, entity_uuid, math.Vector3D(x, y, z),
-                                             math.Rotation(pitch, yaw), metadata)
+                                             math.Rotation(yaw, pitch), metadata)
         self.entities[entity_id] = mob_entity
-        self._dispatch('spawn_mob', mob_entity, math.Rotation(head_pitch, 0))
+        self._dispatch('spawn_mob', mob_entity, math.Rotation(0, head_pitch))
 
 
     async def parse_0x3e(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1116,7 +1126,7 @@ class ConnectionState:
 
         velocity = math.Vector3D(vel_x, vel_y, vel_z)
         entity = self._create_object_entity(obj_type, entity_id, entity_uuid, math.Vector3D(x, y, z),
-                                             math.Rotation(pitch, yaw), data)
+                                             math.Rotation(yaw, pitch), data)
         self.entities[entity_id] = entity
         self._dispatch('spawn_object', entity, velocity)
 
