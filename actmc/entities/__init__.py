@@ -1,7 +1,16 @@
+"""
+actmc.entities
+
+An entity management module for Minecraft entities
+
+:copyright: (c) 2025-present Snifo
+:license: MIT, see LICENSE for more details.
+"""
+
 from . import ambient
 from . import animals
 from . import aquatic
-from . import block
+from . import blocks
 from . import dragons
 from . import entity
 from . import flying
@@ -17,16 +26,16 @@ from . import vehicles
 from . import villagers
 
 BLOCK_ENTITY_TYPES = {
-    'minecraft:bed': block.Bed,
-    'minecraft:flower_pot': block.FlowerPot,
-    'minecraft:banner': block.Banner,
-    'minecraft:beacon': block.Beacon,
-    'minecraft:sign': block.Sign,
-    'minecraft:mob_spawner': block.MobSpawner,
-    'minecraft:skull': block.Skull,
-    'minecraft:structure_block': block.StructureBlock,
-    'minecraft:end_gateway': block.EndGateway,
-    'minecraft:shulker_box': block.ShulkerBox
+    'minecraft:bed': blocks.Bed,
+    'minecraft:flower_pot': blocks.FlowerPot,
+    'minecraft:banner': blocks.Banner,
+    'minecraft:beacon': blocks.Beacon,
+    'minecraft:sign': blocks.Sign,
+    'minecraft:mob_spawner': blocks.MobSpawner,
+    'minecraft:skull': blocks.Skull,
+    'minecraft:structure_block': blocks.StructureBlock,
+    'minecraft:end_gateway': blocks.EndGateway,
+    'minecraft:shulker_box': blocks.ShulkerBox
 }
 
 MOB_ENTITY_TYPES = {
@@ -94,6 +103,7 @@ OBJECT_ENTITY_TYPES = {
         5: vehicles.MinecartHopper,
         6: vehicles.MinecartCommandBlock,
     },
+    18: hanging.ItemFrame,
     50: misc.TNTPrimed,
     51: misc.EnderCrystal,
     60: projectiles.TippedArrow,
@@ -101,27 +111,23 @@ OBJECT_ENTITY_TYPES = {
     62: projectiles.Egg,
     63: projectiles.Fireball,
     64: projectiles.SmallFireball,
-    65: projectiles.ThrownEnderpearl,
+    65: projectiles.Enderpearl,
     66: projectiles.WitherSkull,
     67: projectiles.ShulkerBullet,
     68: projectiles.LlamaSpit,
+    69: misc.XPOrb,  # Custom
     70: misc.FallingBlock,
     71: hanging.ItemFrame,
     72: projectiles.EyeOfEnderSignal,
     73: projectiles.Potion,
-    75: projectiles.ThrownExpBottle,
+    75: projectiles.ExpBottle,
     76: misc.FireworksRocket,
     77: misc.LeashKnot,
     78: misc.ArmorStand,
     79: misc.EvocationFangs,
+    83: hanging.Painting,  # Custom
     90: misc.FishingHook,
     91: projectiles.SpectralArrow,
     93: projectiles.DragonFireball,
-    18: hanging.ItemFrame,
-
-    # Custom
-    83: hanging.Painting,
-    69: misc.XPOrb,
-    200: misc.LightningBolt
-
+    200: misc.LightningBolt  # Custom
 }

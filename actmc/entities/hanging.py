@@ -1,16 +1,39 @@
+"""
+The MIT License (MIT)
+
+Copyright (c) 2025-present Snifo
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+"""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Any, Optional
+from typing import TYPE_CHECKING
+from .entity import Entity
 
 if TYPE_CHECKING:
-    from ..math import Vector3D, Rotation
-
-from .entity import Entity
+    from typing import ClassVar, Tuple, Optional, Dict, Any
 
 __all__ = ('Hanging', 'ItemFrame', 'Painting')
 
 class Hanging(Entity):
-    """Represents a hanging entity."""
+    """Base class for hanging entities."""
 
     __slots__ = ()
 
@@ -30,9 +53,21 @@ class Hanging(Entity):
 
 
 class ItemFrame(Hanging):
-    """Item frame hanging entity."""
+    """
+    Item frame hanging entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for item frames.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the item frame.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:item_frame"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:item_frame'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.75, 0.75)
 
     @property
     def item(self) -> Optional[Dict[str, Any]]:
@@ -42,7 +77,7 @@ class ItemFrame(Hanging):
         Returns
         -------
         Optional[Dict[str, Any]]
-            Slot data for the displayed item, None if frame is empty
+            Slot data for the displayed item, None if frame is empty.
         """
         item_data = self.get_metadata_value(6)
         return item_data if item_data else None
@@ -55,7 +90,7 @@ class ItemFrame(Hanging):
         Returns
         -------
         int
-            Rotation value (0-7, representing 45-degree increments)
+            Rotation value (0-7, representing 45-degree increments).
         """
         return int(self.get_metadata_value(7, 0))
 
@@ -67,7 +102,7 @@ class ItemFrame(Hanging):
         Returns
         -------
         bool
-            True if frame has an item, False if empty
+            True if frame has an item, False if empty.
         """
         return self.item is not None
 
@@ -79,20 +114,31 @@ class ItemFrame(Hanging):
         Returns
         -------
         float
-            Rotation in degrees (0-315 in 45-degree increments)
+            Rotation in degrees (0-315 in 45-degree increments).
         """
         return self.rotation_value * 45.0
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, has_item={self.has_item}>"
 
 class Painting(Hanging):
-    """Painting hanging entity."""
+    """
+    Painting hanging entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for paintings.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the painting.
+    PAINTING_TYPES: ClassVar[Dict[str, Dict[str, int]]]
+        Dictionary mapping painting names to their dimensions.
+    """
 
     __slots__ = ('_painting_type',)
-    ENTITY_TYPE = "minecraft:painting"
 
-    PAINTING_TYPES = {
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:painting'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.0625, 1.0)  # Dynamic based on type
+
+    PAINTING_TYPES: ClassVar[Dict[str, Dict[str, int]]] = {
         "Kebab": {"width": 1, "height": 1},
         "Aztec": {"width": 1, "height": 1},
         "Alban": {"width": 1, "height": 1},
@@ -121,9 +167,8 @@ class Painting(Hanging):
         "DonkeyKong": {"width": 4, "height": 3},
     }
 
-    def __init__(self, entity_id: int, uuid: str, position: Vector3D[float], rotation: Rotation,
-                 metadata: Dict[int, Any]):
-        super().__init__(entity_id, uuid, position, rotation, metadata)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._painting_type: Optional[str] = None
 
     @property
@@ -195,7 +240,3 @@ class Painting(Hanging):
         if painting_name not in self.PAINTING_TYPES:
             raise ValueError(f"Invalid painting name: {painting_name}")
         self._painting_type = painting_name
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position}, painting_type={self.painting_type}>"
-

@@ -1,14 +1,57 @@
+"""
+The MIT License (MIT)
+
+Copyright (c) 2025-present Snifo
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+"""
+
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from .entity import Entity
 
-__all__ = ('Boat', 'Minecart', 'MinecartRideable', 'MinecartContainer', 'MinecartChest', 'MinecartHopper',
-           'MinecartFurnace', 'MinecartTNT', 'MinecartSpawner', 'MinecartCommandBlock')
+if TYPE_CHECKING:
+    from typing import ClassVar, Tuple
+
+__all__ = (
+    'Boat', 'Minecart', 'MinecartRideable', 'MinecartContainer', 'MinecartChest', 'MinecartHopper',
+    'MinecartFurnace', 'MinecartTNT', 'MinecartSpawner', 'MinecartCommandBlock'
+)
+
 
 class Boat(Entity):
-    """Boat entity for water transportation. """
+    """
+    Boat entity for water transportation.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for boats.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the boat.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:boat"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:boat'
+    BOUNDING: ClassVar[Tuple[float, float]] = (1.375, 0.5625)
 
     @property
     def time_since_last_hit(self) -> int:
@@ -18,7 +61,7 @@ class Boat(Entity):
         Returns
         -------
         int
-            Time since last hit from metadata index 6, default 0
+            Time since last hit.
         """
         return int(self.get_metadata_value(6, 0))
 
@@ -30,7 +73,7 @@ class Boat(Entity):
         Returns
         -------
         int
-            Forward direction from metadata index 7, default 1
+            Forward direction, default 1.
         """
         return int(self.get_metadata_value(7, 1))
 
@@ -42,7 +85,7 @@ class Boat(Entity):
         Returns
         -------
         float
-            Damage taken from metadata index 8, default 0.0
+            Damage taken.
         """
         return float(self.get_metadata_value(8, 0.0))
 
@@ -54,8 +97,7 @@ class Boat(Entity):
         Returns
         -------
         int
-            Boat type from metadata index 9 (0=oak, 1=spruce, 2=birch,
-            3=jungle, 4=acacia, 5=dark oak), default 0
+            Boat type (0=oak, 1=spruce, 2=birch, 3=jungle, 4=acacia, 5=dark oak)
         """
         return int(self.get_metadata_value(9, 0))
 
@@ -67,7 +109,7 @@ class Boat(Entity):
         Returns
         -------
         bool
-            Right paddle state from metadata index 10, default False
+            Right paddle state.
         """
         return bool(self.get_metadata_value(10, False))
 
@@ -79,7 +121,7 @@ class Boat(Entity):
         Returns
         -------
         bool
-            Left paddle state from metadata index 11, default False
+            Left paddle state.
         """
         return bool(self.get_metadata_value(11, False))
 
@@ -91,7 +133,7 @@ class Boat(Entity):
         Returns
         -------
         str
-            Wood type name corresponding to boat_type value
+            Wood type name corresponding to boat_type value.
         """
         wood_types = {
             0: "oak",
@@ -103,10 +145,23 @@ class Boat(Entity):
         }
         return wood_types.get(self.boat_type, "oak")
 
+
 class Minecart(Entity):
-    """Base minecart entity for rail transportation."""
+    """
+    Base minecart entity for rail transportation.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
 
     @property
     def shaking_power(self) -> int:
@@ -116,7 +171,7 @@ class Minecart(Entity):
         Returns
         -------
         int
-            Shaking power from metadata index 6, default 0
+            Shaking power.
         """
         return int(self.get_metadata_value(6, 0))
 
@@ -128,7 +183,7 @@ class Minecart(Entity):
         Returns
         -------
         int
-            Shaking direction from metadata index 7, default 1
+            Shaking direction, default 1.
         """
         return int(self.get_metadata_value(7, 1))
 
@@ -140,7 +195,7 @@ class Minecart(Entity):
         Returns
         -------
         float
-            Shaking multiplier from metadata index 8, default 0.0
+            Shaking multiplier.
         """
         return float(self.get_metadata_value(8, 0.0))
 
@@ -152,7 +207,7 @@ class Minecart(Entity):
         Returns
         -------
         int
-            Custom block ID from metadata index 9, default 0
+            Custom block ID.
         """
         return int(self.get_metadata_value(9, 0))
 
@@ -164,7 +219,7 @@ class Minecart(Entity):
         Returns
         -------
         int
-            Custom block Y position from metadata index 10, default 6
+            Custom block Y position, default 6.
         """
         return int(self.get_metadata_value(10, 6))
 
@@ -176,7 +231,7 @@ class Minecart(Entity):
         Returns
         -------
         bool
-            Show custom block flag from metadata index 11, default False
+            Show custom block flag.
         """
         return bool(self.get_metadata_value(11, False))
 
@@ -188,53 +243,162 @@ class Minecart(Entity):
         Returns
         -------
         bool
-            True if shaking_power > 0
+            True if shaking_power > 0.
         """
         return self.shaking_power > 0
 
+
 class MinecartRideable(Minecart):
-    """Rideable minecart that can carry passengers."""
+    """
+    Rideable minecart that can carry passengers.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for rideable minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the rideable minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
+
 
 class MinecartContainer(Minecart):
-    """Base class for minecarts that can store items."""
+    """
+    Base class for minecarts that can store items.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height).
+    """
+
     __slots__ = ()
+
 
 class MinecartChest(MinecartContainer):
-    """Chest minecart for item storage and transportation."""
+    """
+    Chest minecart for item storage and transportation.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for chest minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the chest minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:chest_minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:chest_minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
+
 
 class MinecartHopper(MinecartContainer):
-    """Hopper minecart for item collection and transportation."""
+    """
+    Hopper minecart for item collection and transportation.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for hopper minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the hopper minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:hopper_minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:hopper_minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
+
 
 class MinecartFurnace(Minecart):
-    """Furnace minecart for self-propelled transportation."""
+    """
+    Furnace minecart for self-propelled transportation.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for furnace minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the furnace minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:furnace_minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:furnace_minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
 
     @property
     def is_powered(self) -> bool:
-        """Whether furnace minecart is currently powered."""
+        """
+        Whether furnace minecart is currently powered.
+
+        Returns
+        -------
+        bool
+            True if the furnace minecart is powered, False otherwise.
+        """
         return bool(self.get_metadata_value(12, False))
 
+
 class MinecartTNT(Minecart):
-    """TNT minecart for explosive transportation."""
+    """
+    TNT minecart for explosive transportation.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for TNT minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the TNT minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:tnt_minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:tnt_minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
+
 
 class MinecartSpawner(Minecart):
-    """Spawner minecart for mobile mob spawning."""
+    """
+    Spawner minecart for mobile mob spawning.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for spawner minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the spawner minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:spawner_minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:spawner_minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
+
 
 class MinecartCommandBlock(Minecart):
-    """Command block minecart for mobile command execution."""
+    """
+    Command block minecart for mobile command execution.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for command block minecarts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the command block minecart.
+    """
+
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:commandblock_minecart"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:commandblock_minecart'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.7)
 
     @property
     def command(self) -> str:
@@ -244,7 +408,7 @@ class MinecartCommandBlock(Minecart):
         Returns
         -------
         str
-            Command from metadata index 12, default empty string
+            Command.
         """
         return str(self.get_metadata_value(12, ""))
 
@@ -256,6 +420,6 @@ class MinecartCommandBlock(Minecart):
         Returns
         -------
         str
-            Last output from metadata index 13, default '{"text":""}'
+            Last output, default '{"text":""}'.
         """
         return str(self.get_metadata_value(13, '{"text":""}'))

@@ -1,26 +1,64 @@
+"""
+The MIT License (MIT)
+
+Copyright (c) 2025-present Snifo
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+"""
+
 from __future__ import annotations
 
-from typing import Dict, Any, Optional
+from typing import TYPE_CHECKING
 from .entity import Entity, Living
 
-__all__ = ('Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock', 'FireworksRocket', 'TNTPrimed',
-           'LeashKnot', 'EvocationFangs', 'FishingHook', 'EnderCrystal')
+if TYPE_CHECKING:
+    from typing import ClassVar, Tuple, Optional, Dict, Any
+
+__all__ = ('Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock', 'FireworksRocket',
+           'TNTPrimed', 'LeashKnot', 'EvocationFangs', 'FishingHook', 'EnderCrystal')
 
 class Item(Entity):
-    """Item entity representing a dropped item in the world."""
+    """
+    Item entity representing a dropped item in the world.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for items.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the item.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:item"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:item'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.25, 0.25)
 
     @property
     def item_stack(self) -> Optional[Dict[str, Any]]:
         """
-        Item stack data from metadata index 6.
+        Item stack data.
 
         Returns
         -------
         Optional[Dict[str, Any]]
-            Item stack information or None if empty
+            Item stack information or None if empty.
         """
         item = self.get_metadata_value(6)
         return item if item is not None else None
@@ -33,144 +71,183 @@ class Item(Entity):
         Returns
         -------
         bool
-            True if item stack is present
+            True if item stack is present.
         """
         return self.item_stack is not None
 
-class LightningBolt(Entity):
-    """Lightning bolt entity."""
-
-    @property
-    def type(self) -> int:
-        """
-        The global entity type, currently always 1 for thunderbolt
-
-        Returns
-        -------
-        int
-            global entity type.
-        """
-        return int(self.get_metadata_value(-1, 1))
-
-    __slots__ = ()
-    ENTITY_TYPE = "minecraft:lightning_bolt"
-
 class XPOrb(Entity):
-    """Experience orb entity."""
+    """
+    Experience orb entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for experience orbs.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the experience orb.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:xp_orb"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:xp_orb'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.5, 0.5)
 
     @property
     def count(self) -> float:
         """
-        The amount of experience this orb will reward once collected
+        The amount of experience this orb will reward once collected.
 
         Returns
         -------
         float
-            experience amount.
+            Experience amount.
         """
         return float(self.get_metadata_value(-1, 0.0))
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, position={self.position} count={self.count}>"
+class LightningBolt(Entity):
+    """
+    Lightning bolt entity.
 
-
-class AreaEffectCloud(Entity):
-    """Area effect cloud entity for potion effects and particles."""
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for lightning bolts.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the lightning bolt.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:area_effect_cloud"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:lightning_bolt'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.0, 0.0)  # Lightning has no collision
+
+    @property
+    def type(self) -> int:
+        """
+        The global entity type, currently always 1 for thunderbolt.
+
+        Returns
+        -------
+        int
+            Global entity type.
+        """
+        return int(self.get_metadata_value(-1, 1))
+
+class AreaEffectCloud(Entity):
+    """
+    Area effect cloud entity for potion effects and particles.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for area effect clouds.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the area effect cloud.
+    """
+
+    __slots__ = ()
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:area_effect_cloud'
+    BOUNDING: ClassVar[Tuple[float, float]] = (2.0, 0.5)  # 2.0 * Radius
 
     @property
     def radius(self) -> float:
         """
-        Effect cloud radius from metadata index 6.
+        Effect cloud radius.
 
         Returns
         -------
         float
-            Cloud radius in blocks, default 0.5
+            Cloud radius in blocks.5.
         """
         return float(self.get_metadata_value(6, 0.5))
 
     @property
     def color(self) -> int:
         """
-        Effect cloud color from metadata index 7.
+        Effect cloud color.
 
         Returns
         -------
         int
-            Color value for mob spell particle, default 0
+            Color value for mob spell particle.
         """
         return int(self.get_metadata_value(7, 0))
 
     @property
     def ignore_radius(self) -> bool:
         """
-        Whether to ignore radius and show as single point from metadata index 8.
+        Whether to ignore radius and show as single point.
 
         Returns
         -------
         bool
-            True if should show as single point, default False
+            True if should show as single point.
         """
         return bool(self.get_metadata_value(8, False))
 
     @property
     def particle_id(self) -> int:
         """
-        Particle type ID from metadata index 9.
+        Particle type ID.
 
         Returns
         -------
         int
-            Particle ID, default 15 (mobSpell)
+            Particle ID, default 15 (mobSpell).
         """
         return int(self.get_metadata_value(9, 15))
 
     @property
     def particle_param1(self) -> int:
         """
-        First particle parameter from metadata index 10.
+        First particle parameter.
 
         Returns
         -------
         int
-            Particle parameter 1, default 0
+            Particle parameter 1.
         """
         return int(self.get_metadata_value(10, 0))
 
     @property
     def particle_param2(self) -> int:
         """
-        Second particle parameter from metadata index 11.
+        Second particle parameter.
 
         Returns
         -------
         int
-            Particle parameter 2, default 0
+            Particle parameter 2.
         """
         return int(self.get_metadata_value(11, 0))
 
-
 class ArmorStand(Living):
-    """Armor stand entity extending Living."""
+    """
+    Armor stand entity extending Living.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for armor stands.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the armor stand.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:armor_stand"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:armor_stand'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.5, 1.975)  # Normal size
 
     @property
     def _armor_stand_bit_mask(self) -> int:
         """
-        Armor stand bit mask from metadata index 11.
+        Armor stand bit mask.
 
         Returns
         -------
         int
-            Bit mask flags, default 0
+            Bit mask flags.
         """
         return int(self.get_metadata_value(11, 0))
 
@@ -182,7 +259,7 @@ class ArmorStand(Living):
         Returns
         -------
         bool
-            True if small size
+            True if small size.
         """
         return bool(self._armor_stand_bit_mask & 0x01)
 
@@ -194,7 +271,7 @@ class ArmorStand(Living):
         Returns
         -------
         bool
-            True if has arms
+            True if has arms.
         """
         return bool(self._armor_stand_bit_mask & 0x04)
 
@@ -206,7 +283,7 @@ class ArmorStand(Living):
         Returns
         -------
         bool
-            True if it has baseplate
+            True if it has baseplate.
         """
         return not bool(self._armor_stand_bit_mask & 0x08)
 
@@ -218,19 +295,19 @@ class ArmorStand(Living):
         Returns
         -------
         bool
-            True if is marker
+            True if is marker.
         """
         return bool(self._armor_stand_bit_mask & 0x10)
 
     @property
-    def head_rotation(self) -> Optional[tuple[float, float, float]]:
+    def head_rotation(self) -> tuple[float, float, float]:
         """
-        Head rotation from metadata index 12.
+        Head rotation.
 
         Returns
         -------
-        Optional[tuple[float, float, float]]
-            (x, y, z) rotation values, default (0.0, 0.0, 0.0)
+        tuple[float, float, float]
+            (x, y, z) rotation values, default (0.0, 0.0, 0.0).
         """
         rotation = self.get_metadata_value(12, (0.0, 0.0, 0.0))
         if isinstance(rotation, (list, tuple)) and len(rotation) >= 3:
@@ -238,14 +315,14 @@ class ArmorStand(Living):
         return 0.0, 0.0, 0.0
 
     @property
-    def body_rotation(self) -> Optional[tuple[float, float, float]]:
+    def body_rotation(self) -> tuple[float, float, float]:
         """
-        Body rotation from metadata index 13.
+        Body rotation.
 
         Returns
         -------
-        Optional[tuple[float, float, float]]
-            (x, y, z) rotation values, default (0.0, 0.0, 0.0)
+        tuple[float, float, float]
+            (x, y, z) rotation values, default (0.0, 0.0, 0.0).
         """
         rotation = self.get_metadata_value(13, (0.0, 0.0, 0.0))
         if isinstance(rotation, (list, tuple)) and len(rotation) >= 3:
@@ -253,14 +330,14 @@ class ArmorStand(Living):
         return 0.0, 0.0, 0.0
 
     @property
-    def left_arm_rotation(self) -> Optional[tuple[float, float, float]]:
+    def left_arm_rotation(self) -> tuple[float, float, float]:
         """
-        Left arm rotation from metadata index 14.
+        Left arm rotation.
 
         Returns
         -------
-        Optional[tuple[float, float, float]]
-            (x, y, z) rotation values, default (-10.0, 0.0, -10.0)
+        tuple[float, float, float]
+            (x, y, z) rotation values, default (-10.0, 0.0, -10.0).
         """
         rotation = self.get_metadata_value(14, (-10.0, 0.0, -10.0))
         if isinstance(rotation, (list, tuple)) and len(rotation) >= 3:
@@ -268,14 +345,14 @@ class ArmorStand(Living):
         return -10.0, 0.0, -10.0
 
     @property
-    def right_arm_rotation(self) -> Optional[tuple[float, float, float]]:
+    def right_arm_rotation(self) -> tuple[float, float, float]:
         """
-        Right arm rotation from metadata index 15.
+        Right arm rotation.
 
         Returns
         -------
-        Optional[tuple[float, float, float]]
-            (x, y, z) rotation values, default (-15.0, 0.0, 10.0)
+        tuple[float, float, float]
+            (x, y, z) rotation values, default (-15.0, 0.0, 10.0).
         """
         rotation = self.get_metadata_value(15, (-15.0, 0.0, 10.0))
         if isinstance(rotation, (list, tuple)) and len(rotation) >= 3:
@@ -283,14 +360,14 @@ class ArmorStand(Living):
         return -15.0, 0.0, 10.0
 
     @property
-    def left_leg_rotation(self) -> Optional[tuple[float, float, float]]:
+    def left_leg_rotation(self) -> tuple[float, float, float]:
         """
-        Left leg rotation from metadata index 16.
+        Left leg rotation.
 
         Returns
         -------
-        Optional[tuple[float, float, float]]
-            (x, y, z) rotation values, default (-1.0, 0.0, -1.0)
+        tuple[float, float, float]
+            (x, y, z) rotation values, default (-1.0, 0.0, -1.0).
         """
         rotation = self.get_metadata_value(16, (-1.0, 0.0, -1.0))
         if isinstance(rotation, (list, tuple)) and len(rotation) >= 3:
@@ -298,41 +375,48 @@ class ArmorStand(Living):
         return -1.0, 0.0, -1.0
 
     @property
-    def right_leg_rotation(self) -> Optional[tuple[float, float, float]]:
+    def right_leg_rotation(self) -> tuple[float, float, float]:
         """
-        Right leg rotation from metadata index 17.
+        Right leg rotation.
 
         Returns
         -------
-        Optional[tuple[float, float, float]]
-            (x, y, z) rotation values, default (1.0, 0.0, 1.0)
+        tuple[float, float, float]
+            (x, y, z) rotation values, default (1.0, 0.0, 1.0).
         """
         rotation = self.get_metadata_value(17, (1.0, 0.0, 1.0))
         if isinstance(rotation, (list, tuple)) and len(rotation) >= 3:
             return float(rotation[0]), float(rotation[1]), float(rotation[2])
         return 1.0, 0.0, 1.0
 
-
 class FallingBlock(Entity):
-    """Falling block entity (FallingSand)."""
+    """
+    Falling block entity (FallingSand).
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for falling blocks.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the falling block.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:falling_block"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:falling_block'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.98)
 
     @property
     def _block_type_raw(self) -> int:
         """
         Returns the raw block type integer from metadata.
 
-        This encodes both block ID and metadata:
-        block_type = block_id | (metadata << 12)
-
         Returns
         -------
         int
             The raw encoded block type.
         """
-        return self.get_metadata_value(-1, 0)  # Assuming metadata index 6 for block type
+        return self.get_metadata_value(-1, 0)
 
     @property
     def block_id(self) -> int:
@@ -358,38 +442,47 @@ class FallingBlock(Entity):
         """
         return self._block_type_raw >> 12
 
-
     @property
-    def spawn_position(self) -> Optional[tuple[int, int, int]]:
+    def spawn_position(self) -> tuple[int, int, int]:
         """
-        Original spawn position from metadata index 6.
+        Original spawn position.
 
         Returns
         -------
-        Optional[tuple[int, int, int]]
-            (x, y, z) spawn coordinates, default (0, 0, 0)
+        tuple[int, int, int]
+            (x, y, z) spawn coordinates, default (0, 0, 0).
         """
         pos = self.get_metadata_value(6, (0, 0, 0))
         if isinstance(pos, (list, tuple)) and len(pos) >= 3:
             return int(pos[0]), int(pos[1]), int(pos[2])
         return 0, 0, 0
 
-
 class FireworksRocket(Entity):
-    """Fireworks rocket entity."""
+    """
+    Fireworks rocket entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for fireworks rockets.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the fireworks rocket.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:fireworks_rocket"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:fireworks_rocket'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.25, 0.25)
 
     @property
     def firework_info(self) -> Optional[Dict[str, Any]]:
         """
-        Firework item stack info from metadata index 6.
+        Firework item stack info.
 
         Returns
         -------
         Optional[Dict[str, Any]]
-            Firework item data or None if empty
+            Firework item data or None if empty.
         """
         item = self.get_metadata_value(6)
         return item if item is not None else None
@@ -397,12 +490,12 @@ class FireworksRocket(Entity):
     @property
     def boosted_entity_id(self) -> int:
         """
-        Entity ID that used firework for elytra boosting from metadata index 7.
+        Entity ID that used firework for elytra boosting.
 
         Returns
         -------
         int
-            Entity ID of boosted entity, default 0
+            Entity ID of boosted entity.
         """
         return int(self.get_metadata_value(7, 0))
 
@@ -414,26 +507,36 @@ class FireworksRocket(Entity):
         Returns
         -------
         bool
-            True if used for elytra boosting
+            True if used for elytra boosting.
         """
         return self.boosted_entity_id != 0
 
-
 class TNTPrimed(Entity):
-    """Primed TNT entity."""
+    """
+    Primed TNT entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for primed TNT.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the primed TNT.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:tnt"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:tnt'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.98, 0.98)
 
     @property
     def fuse_time(self) -> int:
         """
-        Remaining fuse time in ticks from metadata index 6.
+        Remaining fuse time in ticks.
 
         Returns
         -------
         int
-            Fuse time remaining, default 80 ticks
+            Fuse time remaining.
         """
         return int(self.get_metadata_value(6, 80))
 
@@ -445,30 +548,60 @@ class TNTPrimed(Entity):
         Returns
         -------
         bool
-            True if fuse time <= 20 ticks (1 second)
+            True if fuse time <= 20 ticks (1 second).
         """
         return self.fuse_time <= 20
 
-
 class LeashKnot(Entity):
-    """Leash-knot entity attached to fences."""
+    """
+    Leash-knot entity attached to fences.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for leash knots.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the leash knot.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:leash_knot"
 
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:leash_knot'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.375, 0.5)
 
 class EvocationFangs(Entity):
-    """Evocation fangs entity created by Evoker spells."""
+    """
+    Evocation fangs entity created by Evoker spells.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for evocation fangs.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the evocation fangs.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:evocation_fangs"
 
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:evocation_fangs'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.5, 0.8)
 
 class FishingHook(Entity):
-    """Fishing hook/bobber entity."""
+    """
+    Fishing hook/bobber entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for fishing hooks.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the fishing hook.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:fishing_bobber"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:fishing_bobber'
+    BOUNDING: ClassVar[Tuple[float, float]] = (0.25, 0.25)  # Estimated
 
     @property
     def owner_id(self) -> int:
@@ -485,12 +618,12 @@ class FishingHook(Entity):
     @property
     def hooked_entity_id(self) -> int:
         """
-        ID of hooked entity from metadata index 6.
+        ID of hooked entity.
 
         Returns
         -------
         int
-            Hooked entity ID + 1, or 0 if no entity hooked
+            Hooked entity ID + 1, or 0 if no entity hooked.
         """
         return int(self.get_metadata_value(6, 0))
 
@@ -502,7 +635,7 @@ class FishingHook(Entity):
         Returns
         -------
         bool
-            True if an entity is hooked
+            True if an entity is hooked.
         """
         return self.hooked_entity_id > 0
 
@@ -514,27 +647,37 @@ class FishingHook(Entity):
         Returns
         -------
         Optional[int]
-            Real entity ID or None if no entity hooked
+            Real entity ID or None if no entity hooked.
         """
         hook_id = self.hooked_entity_id
         return hook_id - 1 if hook_id > 0 else None
 
-
 class EnderCrystal(Entity):
-    """End crystal entity."""
+    """
+    End crystal entity.
+
+    Attributes
+    ----------
+    ENTITY_TYPE: ClassVar[str]
+        The Minecraft entity type identifier for end crystals.
+    BOUNDING: ClassVar[Tuple[float, float]]
+        The bounding box dimensions (width/depth, height) of the end crystal.
+    """
 
     __slots__ = ()
-    ENTITY_TYPE = "minecraft:end_crystal"
+
+    ENTITY_TYPE: ClassVar[str] = 'minecraft:end_crystal'
+    BOUNDING: ClassVar[Tuple[float, float]] = (2.0, 2.0)
 
     @property
     def beam_target(self) -> Optional[tuple[int, int, int]]:
         """
-        Beam target position from metadata index 6.
+        Beam target position.
 
         Returns
         -------
         Optional[tuple[int, int, int]]
-            (x, y, z) target coordinates or None if no target
+            (x, y, z) target coordinates or None if no target.
         """
         target = self.get_metadata_value(6)
         if target is not None and isinstance(target, (list, tuple)) and len(target) >= 3:
@@ -544,12 +687,12 @@ class EnderCrystal(Entity):
     @property
     def show_bottom(self) -> bool:
         """
-        Whether to show crystal bottom from metadata index 7.
+        Whether to show crystal bottom.
 
         Returns
         -------
         bool
-            True if bottom should be shown, default True
+            True if bottom should be shown.
         """
         return bool(self.get_metadata_value(7, True))
 
@@ -561,6 +704,6 @@ class EnderCrystal(Entity):
         Returns
         -------
         bool
-            True if beam target is set
+            True if beam target is set.
         """
         return self.beam_target is not None
