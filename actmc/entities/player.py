@@ -28,7 +28,9 @@ from typing import TYPE_CHECKING
 from .entity import Living
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Optional, Tuple
+    from typing import Any, ClassVar, Optional, Tuple, Dict
+    from ..math import Vector3D, Rotation
+    from ..ui import tab
 
 __all__ = ('Player',)
 
@@ -45,10 +47,33 @@ class Player(Living):
         The bounding box dimensions (width/depth, height) of the player.
     """
 
-    __slots__ = ()
+    __slots__ = ('_tablist',)
+
+    def __init__(self,
+                 entity_id: int,
+                 uuid: str,
+                 position: Vector3D[float],
+                 rotation: Rotation,
+                 metadata: Dict[int, Any],
+                 tablist: Dict[str, Optional[tab.TabPlayer]]) -> None:
+        super().__init__(entity_id, uuid, position, rotation, metadata)
+        self._tablist: Dict[str, Optional[tab.TabPlayer]] = tablist
 
     ENTITY_TYPE: ClassVar[str] = 'minecraft:player'
     BOUNDING: ClassVar[Tuple[float, float]] = (0.6, 1.8)
+
+    @property
+    def info(self) -> Optional[tab.TabPlayer]:
+        """
+        Get additional player information from the server's tab list.
+
+        Returns
+        -------
+        Optional[tab.TabPlayer]
+            The player's tab list entry if they are currently online and
+            visible in the tab list, None otherwise.
+        """
+        return self._tablist.get(self.uuid)
 
     @property
     def additional_hearts(self) -> float:

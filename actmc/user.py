@@ -4,6 +4,7 @@ from .entities.entity import BaseEntity
 from .entities.player import Player
 from typing import TYPE_CHECKING, overload
 from .math import Vector3D, Rotation
+from .ui import tab
 
 if TYPE_CHECKING:
     from typing import Literal, Dict, ClassVar, Optional
@@ -55,10 +56,10 @@ class User(Player):
         spawn_point: Vector3D[float]
 
     def __init__(self, entity_id: int, username: str, uuid: str, *, state: ConnectionState) -> None:
-        super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {})
+        super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {},
+                         state.tablist)
         self._state: ConnectionState = state
         self._update(username, uuid)
-
 
     def _update(self, username: str, uuid: str) -> None:
         self.username = username

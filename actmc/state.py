@@ -27,6 +27,7 @@ from __future__ import annotations
 from . import entities, math, protocol
 from typing import TYPE_CHECKING
 from .ui.chat import Message
+from .ui import tab
 from .chunk import *
 from .user import User
 import asyncio
@@ -82,6 +83,8 @@ class ConnectionState:
         self.chunks: Dict[math.Vector2D, Chunk] = {}
 
         self.entities: Dict[int, entities.entity.Entity] = {}
+        self.tablist: Dict[str, tab.TabPlayer] = {}
+
         # Initialize packet parser cache
         if not self._packet_parsers:
             self._build_parser_cache()
@@ -841,7 +844,6 @@ class ConnectionState:
         """
         x, y, z = protocol.read_position(data)
         self.user.spawn_point = math.Vector3D(x, y, z)
-
         self._dispatch('spawn_position', self.user.spawn_point)
 
     async def parse_0x35(self, data: protocol.ProtocolBuffer) -> None:
@@ -887,6 +889,118 @@ class ConnectionState:
         location = protocol.read_position(buffer)
         self._dispatch('open_sign_editor', math.Vector3D(*location))
 
+    async def parse_0x2d(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Combat Event (Packet ID: 0x2D)"""
+        event = protocol.read_varint(buffer)
+
+        if event == 0:
+            self._dispatch('enter_combat')
+        elif event == 1:
+            duration = protocol.read_varint(buffer)
+            entity_id = protocol.read_int(buffer)
+            entity = self.entities.get(entity_id)
+
+            if not entity:
+                _logger.warning(f"Combat ended for untracked entity {entity_id}")
+                return
+
+            self._dispatch('end_combat', entity, duration)
+        elif event == 2:
+            player_id = protocol.read_varint(buffer)
+            entity_id = protocol.read_int(buffer)
+            message = protocol.read_chat(buffer)
+
+            player = self.entities.get(player_id)
+            entity = self.entities.get(entity_id)
+
+            if not player:
+                _logger.warning(f"Entity death for untracked player {player_id}")
+                return
+
+            if not entity:
+                _logger.warning(f"Entity death for untracked entity {entity_id}")
+                return
+
+            self._dispatch('player_death', player, entity, Message(message))
+
+    async def parse_0x2e(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Player List Item (Packet ID: 0x2E)"""
+        action = protocol.read_varint(buffer)
+        number_of_players = protocol.read_varint(buffer)
+
+        players_affected = []
+
+        for _ in range(number_of_players):
+            player_uuid = protocol.read_uuid(buffer)
+            uuid_str = str(player_uuid)
+
+            if action == 0:  # add player
+                name = protocol.read_string(buffer, 16)
+                number_of_properties = protocol.read_varint(buffer)
+
+                properties = []
+                for _ in range(number_of_properties):
+                    property_name = protocol.read_string(buffer, 32767)
+                    value = protocol.read_string(buffer, 32767)
+                    is_signed = protocol.read_bool(buffer)
+                    signature = protocol.read_string(buffer, 32767) if is_signed else None
+                    properties.append(tab.Property(property_name, value, signature))
+
+                gamemode = protocol.read_varint(buffer)
+                ping = protocol.read_varint(buffer)
+                has_display_name = protocol.read_bool(buffer)
+                display_name = protocol.read_chat(buffer) if has_display_name else None
+
+                player = tab.TabPlayer(
+                    name=name,
+                    properties=properties,
+                    gamemode=gamemode,
+                    ping=ping,
+                    display_name=display_name
+                )
+                self.tablist[uuid_str] = player
+                players_affected.append(player)
+
+            elif action == 1:  # update gamemode
+                gamemode = protocol.read_varint(buffer)
+                if uuid_str in self.tablist:
+                    player = self.tablist[uuid_str]
+                    player.gamemode = gamemode
+                    players_affected.append(player)
+
+            elif action == 2:  # update latency
+                ping = protocol.read_varint(buffer)
+                if uuid_str in self.tablist:
+                    player = self.tablist[uuid_str]
+                    player.ping = ping
+                    players_affected.append(player)
+
+            elif action == 3:  # update display name
+                has_display_name = protocol.read_bool(buffer)
+                display_name = protocol.read_chat(buffer) if has_display_name else None
+                if uuid_str in self.tablist:
+                    player = self.tablist[uuid_str]
+                    player.display_name = display_name
+                    players_affected.append(player)
+
+            elif action == 4:  # remove player
+                if uuid_str in self.tablist:
+                    player = self.tablist[uuid_str]
+                    del self.tablist[uuid_str]
+                    players_affected.append(player)
+
+        if players_affected:
+            action_names = {
+                0: 'players_add',
+                1: 'players_gamemode_update',
+                2: 'players_ping_update',
+                3: 'players_display_name_update',
+                4: 'players_remove'
+            }
+            event_name = action_names.get(action)
+            if event_name:
+                self._dispatch(event_name, players_affected)
+
     async def parse_0x05(self, buffer: protocol.ProtocolBuffer) -> None:
         """Spawn Player (Packet ID: 0x05)"""
         entity_id = protocol.read_varint(buffer)
@@ -897,9 +1011,8 @@ class ConnectionState:
         yaw = protocol.read_angle(buffer)
         pitch = protocol.read_angle(buffer)
         metadata = protocol.read_entity_metadata(buffer)
-
         player = entities.player.Player(entity_id, player_uuid, math.Vector3D(x, y, z), math.Rotation(yaw, pitch),
-                                        metadata)
+                                        metadata, self.tablist)
         self.entities[entity_id] = player
         self._dispatch('spawn_player', player)
 
@@ -922,7 +1035,6 @@ class ConnectionState:
                 modifiers[modifier_uuid] = {'amount': amount, 'operation': operation}
             properties[key] = {'value': value, 'modifiers': modifiers}
 
-        # Update entity if it exists
         if entity_id in self.entities:
             entity = self.entities[entity_id]
             entity.update_properties(properties)
