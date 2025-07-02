@@ -30,10 +30,98 @@ from .entity import Entity, Living
 if TYPE_CHECKING:
     from typing import ClassVar, Tuple, Optional, Dict, Any
 
-__all__ = ('Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock', 'FireworksRocket',
-           'TNTPrimed', 'LeashKnot', 'EvocationFangs', 'FishingHook', 'EnderCrystal')
+__all__ = ('ItemStack', 'Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock',
+           'FireworksRocket', 'TNTPrimed', 'LeashKnot', 'EvocationFangs', 'FishingHook', 'EnderCrystal')
 
-class Item(Entity):
+
+class Item:
+    """Represents a Minecraft item."""
+
+    __slots__ = ('id', 'damage', 'nbt')
+
+    def __init__(self, item_id: int, item_damage: int = 0, nbt: Optional[Dict[str, Any]] = None) -> None:
+        self.id: int = item_id
+        self.damage: int = item_damage
+        self.nbt: Optional[Dict[str, Any]] = nbt
+
+    @property
+    def has_nbt(self) -> bool:
+        """
+        Check if this item has NBT data.
+
+        Returns
+        -------
+        bool
+            True if NBT data is present
+        """
+        return self.nbt is not None and self.nbt != {}
+
+    @property
+    def is_damaged(self) -> bool:
+        """
+        Check if this item has damage (for tools/armor).
+
+        Returns
+        -------
+        bool
+            True if damage > 0
+        """
+        return self.damage > 0
+
+    @property
+    def is_enchanted(self) -> bool:
+        """
+        Check if this item has enchantments.
+
+        Returns
+        -------
+        bool
+            True if item has enchantment NBT data
+        """
+        if not self.has_nbt:
+            return False
+
+        # Check for both possible enchantment tags
+        return ('Enchantments' in self.nbt or
+                'StoredEnchantments' in self.nbt or
+                'ench' in self.nbt)  # Legacy format
+
+    def get_enchantments(self) -> list[Dict[str, int]]:
+        """
+        Get enchantments from NBT data.
+
+        Returns
+        -------
+        list[Dict[str, int]]
+            List of enchantment dictionaries with 'id' and 'lvl' keys
+        """
+        if not self.has_nbt:
+            return []
+
+        enchants = []
+        for key in ['Enchantments', 'StoredEnchantments', 'ench']:
+            if key in self.nbt and isinstance(self.nbt[key], list):
+                for ench in self.nbt[key]:
+                    if isinstance(ench, dict) and 'id' in ench and 'lvl' in ench:
+                        enchants.append({
+                            'id': ench['id'],
+                            'lvl': ench['lvl']
+                        })
+
+        return enchants
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} id={self.id}, damage={self.damage}>"
+
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another Item."""
+        if not isinstance(other, Item):
+            return False
+
+        return self.id == other.id and self.damage == other.damage and self.nbt == other.nbt
+
+
+class ItemStack(Entity):
     """
     Item entity representing a dropped item in the world.
 
@@ -54,17 +142,48 @@ class Item(Entity):
     BOUNDING: ClassVar[Tuple[float, float]] = (0.25, 0.25)
 
     @property
-    def item_stack(self) -> Optional[Dict[str, Any]]:
+    def _item_stack_data(self) -> Optional[Dict[str, Any]]:
         """
-        Item stack data.
+        Raw item stack data from metadata.
 
         Returns
         -------
         Optional[Dict[str, Any]]
-            Item stack information or None if empty.
+            Raw item stack information or None if empty.
         """
         item = self.get_metadata_value(6)
         return item if item is not None else None
+
+    @property
+    def item(self) -> Optional[Item]:
+        """
+        Item instance representing the dropped item.
+
+        Returns
+        -------
+        Optional[Item]
+            Item instance or None if no item data available.
+        """
+        data = self._item_stack_data
+
+        if data:
+            return Item(data.get('item_id', 0), data.get('item_damage', 0), data.get('nbt', None))
+        return None
+
+    @property
+    def count(self) -> int:
+        """
+        Number of items in the stack.
+
+        Returns
+        -------
+        int
+            Item count, 0 if no item.
+        """
+        data = self._item_stack_data
+        if data is None:
+            return 0
+        return int(data.get('item_count', 0))
 
     @property
     def has_item(self) -> bool:
@@ -76,7 +195,19 @@ class Item(Entity):
         bool
             True if item stack is present.
         """
-        return self.item_stack is not None
+        return self._item_stack_data is not None
+
+    @property
+    def is_valid_item(self) -> bool:
+        """
+        Whether the item entity contains a valid item.
+
+        Returns
+        -------
+        bool
+            True if item is present and has a positive count.
+        """
+        return self.has_item and self.count > 0
 
 
 class XPOrb(Entity):

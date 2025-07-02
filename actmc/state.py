@@ -1198,7 +1198,8 @@ class ConnectionState:
         item = protocol.read_slot(buffer)
 
         if entity_id in self.entities:
-            self._dispatch('entity_equipment',  self.entities[entity_id], slot, item)
+            print('entity_equipment',  self.entities[entity_id], slot, item)
+
 
     async def parse_0x32(self, buffer: protocol.ProtocolBuffer) -> None:
         """Destroy Entities (Packet ID: 0x32)"""
@@ -1294,3 +1295,89 @@ class ConnectionState:
         self.entities[entity_id] = entity
         self._dispatch('spawn_experience_orb', entity)
 
+    async def parse_0x11(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Confirm Transaction (Packet ID: 0x11)"""
+        window_id = protocol.read_byte(buffer)
+        action_number = protocol.read_short(buffer)
+        accepted = protocol.read_boolean(buffer)
+
+        self._dispatch('confirm_transaction', window_id, action_number, accepted)
+
+    async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Close Window (Packet ID: 0x12)"""
+        window_id = protocol.read_ubyte(buffer)
+
+        # Remove window from tracking if we're keeping track of open windows
+        if hasattr(self, 'open_windows') and window_id in self.open_windows:
+            del self.open_windows[window_id]
+
+        self._dispatch('close_window', window_id)
+
+    async def parse_0x13(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Open Window (Packet ID: 0x13)"""
+        window_id = protocol.read_ubyte(buffer)
+        window_type = protocol.read_string(buffer, max_length=32)
+        window_title = protocol.read_chat(buffer)
+        number_of_slots = protocol.read_ubyte(buffer)
+
+        # Entity ID is optional, only present for EntityHorse windows
+        entity_id = None
+        if window_type == "EntityHorse":
+            entity_id = protocol.read_int(buffer)
+
+        # Track open window
+        if not hasattr(self, 'open_windows'):
+            self.open_windows = {}
+
+        window_info = {
+            'type': window_type,
+            'title': window_title,
+            'slots': number_of_slots,
+            'entity_id': entity_id
+        }
+        self.open_windows[window_id] = window_info
+
+        self._dispatch('open_window', window_id, window_type, window_title, number_of_slots, entity_id)
+
+    async def parse_0x14(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Window Items (Packet ID: 0x14)"""
+        window_id = protocol.read_ubyte(buffer)
+        count = protocol.read_short(buffer)
+        slot_data = []
+
+        for _ in range(count):
+            slot = protocol.read_slot(buffer)
+            slot_data.append(slot)
+
+        self._dispatch('window_items', window_id, slot_data)
+
+    async def parse_0x15(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Window Property (Packet ID: 0x15)"""
+        window_id = protocol.read_ubyte(buffer)
+        property_id = protocol.read_short(buffer)
+        value = protocol.read_short(buffer)
+
+        # Track window properties if we're maintaining window state
+        if hasattr(self, 'open_windows') and window_id in self.open_windows:
+            if 'properties' not in self.open_windows[window_id]:
+                self.open_windows[window_id]['properties'] = {}
+            self.open_windows[window_id]['properties'][property_id] = value
+
+        self._dispatch('window_property', window_id, property_id, value)
+
+    async def parse_0x16(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Set Slot (Packet ID: 0x16)"""
+        window_id = protocol.read_byte(buffer)
+        slot = protocol.read_short(buffer)
+        slot_data = protocol.read_slot(buffer)
+
+        # Handle special cases for cursor and hotbar editing
+        if window_id == -1:
+            # Setting cursor (dragged item)
+            self._dispatch('set_cursor', slot_data)
+        elif window_id == -2:
+            # Inventory slot update without animation
+            self._dispatch('set_slot_no_animation', slot, slot_data)
+        else:
+            # Regular slot update
+            self._dispatch('set_slot', window_id, slot, slot_data)

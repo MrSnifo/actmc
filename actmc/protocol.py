@@ -572,29 +572,23 @@ def read_slot(buffer: ProtocolBuffer) -> Optional[Dict[str, Any]]:
     if item_id == -1:
         return None
 
-    # Read Item Count (Byte) - only present if Block ID is not -1
     item_count = read_byte(buffer)
 
-    # Read Item Damage (Short) - only present if Block ID is not -1
     item_damage = read_short(buffer)
 
-    # Read NBT data - only present if Block ID is not -1
     nbt_data = None
     if buffer.remaining() > 0:
         pos = buffer.tell()
         try:
-            # Check if NBT data is present (non-zero byte)
             nbt_indicator = read_byte(buffer)
 
             if nbt_indicator == 0:
                 # No NBT data
                 nbt_data = None
             else:
-                # Reset position and read NBT compound
                 buffer.seek(pos)
                 nbt_data = read_nbt(buffer)
         except (EOFError, ValueError, struct.error):
-            # If NBT reading fails, reset position
             buffer.seek(pos)
             nbt_data = None
 
