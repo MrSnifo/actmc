@@ -471,6 +471,31 @@ class ConnectionState:
         buffer.write(protocol.write_varint(hand))
         await self.send_packet(0x20, buffer.getvalue())
 
+    async def send_confirm_transaction(self, window_id: int, action_number: int, accepted: bool) -> None:
+        """
+        Send the Confirm Transaction packet (0x05).
+
+        If a transaction sent by the client was not accepted, the server will reply with a
+        Confirm Transaction (clientbound) packet with the Accepted field set to false.
+        When this happens, the client must send this packet to apologize (as with movement),
+        otherwise the server ignores any successive transactions.
+
+        Parameters
+        ----------
+        window_id: int
+            The ID of the window that the action occurred in.
+        action_number: int
+            Every action that is to be accepted has a unique number. This number is an
+            incrementing integer (starting at 1) with separate counts for each window ID.
+        accepted: bool
+            Whether the action was accepted.
+        """
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_byte(window_id))
+        buffer.write(protocol.pack_short(action_number))
+        buffer.write(protocol.pack_bool(accepted))
+        await self.send_packet(0x05, buffer.getvalue())
+
     async def send_player_digging(self,
                                   status: int,
                                   position: math.Vector3D[int] = math.Vector3D(0, 0, 0),
@@ -1302,8 +1327,8 @@ class ConnectionState:
         """Confirm Transaction (Packet ID: 0x11)"""
         window_id = protocol.read_byte(buffer)
         action_number = protocol.read_short(buffer)
-        accepted = protocol.read_byte(buffer)
-
+        accepted = protocol.read_bool(buffer)
+        await self.send_confirm_transaction(window_id, action_number, accepted)
         self._dispatch('transaction_confirmed', window_id, action_number, accepted)
 
     async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:
