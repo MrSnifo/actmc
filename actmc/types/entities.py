@@ -22,7 +22,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from typing import TypedDict, List, NotRequired, Dict, Any, Literal, Required
+from typing import TypedDict, List, NotRequired, Dict, Any, Literal, Required, Optional
 
 
 class BannerPattern(TypedDict):
@@ -117,3 +117,9 @@ class EndGateway(TypedDict):
 class Bed(TypedDict):
     """Bed block entity representing bed color."""
     color: int
+
+class ItemData(TypedDict):
+    item_id: int
+    item_damage: int
+    item_count: int
+    nbt: Optional[Dict[str, Any]]

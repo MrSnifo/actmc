@@ -4,7 +4,7 @@ import uuid
 import io
 from .errors import DataTooShortError, InvalidDataError
 from typing import Union, Optional, Tuple, Dict, List, Any
-
+from .types.entities import ItemData
 
 class ProtocolBuffer:
     """A wrapper around BytesIO with protocol-specific methods"""
@@ -564,7 +564,7 @@ def read_entity_metadata(buffer: ProtocolBuffer) -> Dict[int, Any]:
     return metadata
 
 
-def read_slot(buffer: ProtocolBuffer) -> Optional[Dict[str, Any]]:
+def read_slot(buffer: ProtocolBuffer) -> Optional[ItemData]:
     """Read slot data from buffer according to Minecraft protocol"""
     # Read Block ID (Short)
     item_id = read_short(buffer)

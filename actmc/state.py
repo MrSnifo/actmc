@@ -27,7 +27,7 @@ from __future__ import annotations
 from . import entities, math, protocol
 from typing import TYPE_CHECKING
 from .ui.chat import Message
-from .ui import tab
+from .ui import tab, gui
 from .chunk import *
 from .user import User
 import asyncio
@@ -84,6 +84,7 @@ class ConnectionState:
 
         self.entities: Dict[int, entities.entity.Entity] = {}
         self.tablist: Dict[str, tab.TabPlayer] = {}
+        self.windows: Dict[int, gui.Window] = {}
 
         # Initialize packet parser cache
         if not self._packet_parsers:
@@ -602,6 +603,8 @@ class ConnectionState:
         self.user = User(entity_id, self.username, self.uid, state=self)
         self.user.gamemode = self.user.GAMEMODE.get(gamemode, 'survival')
         self.user.dimension = self.user.DIMENSION.get(dimension, 'overworld')
+        # Player's inventory.
+        self.windows[0] = gui.Window(0, 'container', Message('inventory'), 45)
         # Needed to update user properties and metadata.
         self.entities[entity_id] = self.user
         self._dispatch('join')
@@ -1197,8 +1200,8 @@ class ConnectionState:
         slot = protocol.read_varint(buffer)
         item = protocol.read_slot(buffer)
 
-        if entity_id in self.entities:
-            print('entity_equipment',  self.entities[entity_id], slot, item)
+        """if entity_id in self.entities:
+            print('entity_equipment',  self.entities[entity_id], slot, item)"""
 
 
     async def parse_0x32(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1299,19 +1302,18 @@ class ConnectionState:
         """Confirm Transaction (Packet ID: 0x11)"""
         window_id = protocol.read_byte(buffer)
         action_number = protocol.read_short(buffer)
-        accepted = protocol.read_boolean(buffer)
+        accepted = protocol.read_byte(buffer)
 
-        self._dispatch('confirm_transaction', window_id, action_number, accepted)
+        self._dispatch('transaction_confirmed', window_id, action_number, accepted)
 
     async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:
         """Close Window (Packet ID: 0x12)"""
         window_id = protocol.read_ubyte(buffer)
 
-        # Remove window from tracking if we're keeping track of open windows
-        if hasattr(self, 'open_windows') and window_id in self.open_windows:
-            del self.open_windows[window_id]
+        if window_id in self.windows:
+            del self.windows[window_id]
 
-        self._dispatch('close_window', window_id)
+        self._dispatch('window_closed', window_id)
 
     async def parse_0x13(self, buffer: protocol.ProtocolBuffer) -> None:
         """Open Window (Packet ID: 0x13)"""
@@ -1320,36 +1322,34 @@ class ConnectionState:
         window_title = protocol.read_chat(buffer)
         number_of_slots = protocol.read_ubyte(buffer)
 
-        # Entity ID is optional, only present for EntityHorse windows
-        entity_id = None
-        if window_type == "EntityHorse":
+        window = gui.Window(window_id, window_type, Message(window_title), number_of_slots)
+
+        if window_type == 'EntityHorse':
+            # Custom property.
             entity_id = protocol.read_int(buffer)
+            window.set_property(-1, entity_id)
 
-        # Track open window
-        if not hasattr(self, 'open_windows'):
-            self.open_windows = {}
-
-        window_info = {
-            'type': window_type,
-            'title': window_title,
-            'slots': number_of_slots,
-            'entity_id': entity_id
-        }
-        self.open_windows[window_id] = window_info
-
-        self._dispatch('open_window', window_id, window_type, window_title, number_of_slots, entity_id)
+        self.windows[window_id] = window
+        self._dispatch('window_opened', window)
 
     async def parse_0x14(self, buffer: protocol.ProtocolBuffer) -> None:
         """Window Items (Packet ID: 0x14)"""
         window_id = protocol.read_ubyte(buffer)
         count = protocol.read_short(buffer)
-        slot_data = []
 
-        for _ in range(count):
-            slot = protocol.read_slot(buffer)
-            slot_data.append(slot)
+        if window_id not in self.windows:
+            window = gui.Window(window_id, 'container', Message('inventory'), count)
+            self.windows[window_id] = window
+            return
 
-        self._dispatch('window_items', window_id, slot_data)
+        window = self.windows[window_id]
+
+        for i in range(count):
+            slot_data = protocol.read_slot(buffer)
+            if slot_data is not None:
+                window.set_slot(i, slot_data)
+
+        self._dispatch('window_items_updated', window)
 
     async def parse_0x15(self, buffer: protocol.ProtocolBuffer) -> None:
         """Window Property (Packet ID: 0x15)"""
@@ -1357,27 +1357,38 @@ class ConnectionState:
         property_id = protocol.read_short(buffer)
         value = protocol.read_short(buffer)
 
-        # Track window properties if we're maintaining window state
-        if hasattr(self, 'open_windows') and window_id in self.open_windows:
-            if 'properties' not in self.open_windows[window_id]:
-                self.open_windows[window_id]['properties'] = {}
-            self.open_windows[window_id]['properties'][property_id] = value
+        if window_id not in self.windows:
+            _logger.warning(
+                f"Received property update for unknown window ID: {window_id} (property: {property_id},"
+                f" value: {value})")
+            return
 
-        self._dispatch('window_property', window_id, property_id, value)
+        window = self.windows[window_id]
+        window.set_property(property_id, value)
+        self._dispatch('window_property_changed', window, property_id, value)
 
     async def parse_0x16(self, buffer: protocol.ProtocolBuffer) -> None:
         """Set Slot (Packet ID: 0x16)"""
         window_id = protocol.read_byte(buffer)
-        slot = protocol.read_short(buffer)
+        slot_index = protocol.read_short(buffer)
         slot_data = protocol.read_slot(buffer)
 
-        # Handle special cases for cursor and hotbar editing
+        # Handle special window IDs
         if window_id == -1:
-            # Setting cursor (dragged item)
-            self._dispatch('set_cursor', slot_data)
+            # Cursor slot (dragged item)
+            self._dispatch('cursor_slot_changed', slot_data)
         elif window_id == -2:
-            # Inventory slot update without animation
-            self._dispatch('set_slot_no_animation', slot, slot_data)
+            if 0 in self.windows:
+                updated_slot = self.windows[0].set_slot(slot_index, slot_data)
+                self._dispatch('inventory_slot_changed', updated_slot)
+            else:
+                _logger.warning("Received inventory update but no player inventory window found")
         else:
-            # Regular slot update
-            self._dispatch('set_slot', window_id, slot, slot_data)
+            # Regular window slot update
+            if window_id not in self.windows:
+                _logger.warning(f"Received slot update for unknown window ID: {window_id} (slot: {slot_index})")
+                return
+
+            window = self.windows[window_id]
+            updated_slot = window.set_slot(slot_index, slot_data)
+            self._dispatch('window_slot_changed', window, updated_slot)

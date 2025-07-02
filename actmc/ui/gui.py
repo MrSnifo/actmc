@@ -1,17 +1,36 @@
-from typing import Dict, List, Optional, Any
-from .chat import Message
-from ..entities.misc import Item
-import logging
 
-_logger = logging.getLogger(__name__)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from ..entities.misc import Item
+
+
+if TYPE_CHECKING:
+    from typing import Optional, List, Dict, Any
+    from ..types.entities import ItemData
+    from .chat import Message
 
 
 class Slot:
-    __slots__ = ('id', 'item', 'item_count')
-    
-    
-    def __init__(self, slot_id:  int):
-        self.id: int = slot_id
+    """
+    Represents a single inventory slot that can hold an item.
+
+    A slot is identified by an index and can contain an item with a specific count.
+    Slots can be empty (no item or zero count).
+
+    Attributes
+    ----------
+    index: int
+        The slot's position index in the container
+    item: Optional[Item]
+        The item currently in this slot, None if empty
+    item_count: int
+        Number of items in this slot, 0 if empty
+    """
+    __slots__ = ('index', 'item', 'item_count')
+
+    def __init__(self, slot_id: int):
+        self.index: int = slot_id
         self.item: Optional[Item] = None
         self.item_count: int = 0
 
@@ -20,394 +39,126 @@ class Slot:
         """
         Check if the slot is empty.
 
+        A slot is considered empty if it has no item or the item count is zero or negative.
+
         Returns
         -------
         bool
-            True if slot is empty, False otherwise
+            True if slot is empty (no item or count <= 0), False otherwise
         """
         return self.item is None or self.item_count <= 0
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, item={self.item}, item_count={self.item_count}>"
+
+        return f"<{self.__class__.__name__} index={self.index}, item={self.item}>"
 
 
 class Window:
+    """
+    Represents a GUI window containing multiple item slots.
+
+    Windows are containers like chests, inventories, or crafting tables that hold
+    items in organized slots. Each window has a type, title, and fixed number of slots.
+
+    Attributes
+    ----------
+    id: int
+        The window's unique identifier.
+    type: str
+        Window type classification.
+    title: Message
+        Window's display title as a Message object.
+    slot_count: int
+        Total number of available slots.
+    slots: List[Slot]
+        List of all slots in this window.
+    properties: Dict[int, Any]
+        Window-specific properties (furnace progress, etc.).
+    is_open: bool
+        Whether this window is currently open.
+    """
     __slots__ = ('id', 'type', 'title', 'slot_count', 'entity_id', 'slots', 'properties', 'is_open')
 
-    def __init__(self, window_id: int, window_type: str, title: str, slot_count: int) -> None:
+    def __init__(self, window_id: int, window_type: str, title: Message, slot_count: int) -> None:
         self.id: int = window_id
         self.type: str = window_type
-        self.title: Message = Message(title)
+        self.title: Message = title
         self.slot_count: int = slot_count
         self.slots: List[Slot] = [Slot(i) for i in range(slot_count)]
         self.properties: Dict[int, Any] = {}
-        self.is_open = True
+        self.is_open: bool = True
 
-    def set_item(self, slot_index: int, item: Item, item_count: int) -> bool:
-        if 0 <= slot_index < len(self.slots):
-            slot = self.slots[slot_index]
-            slot.item = item
-            slot.item_count =item_count
-            return True
-        return False
+    def set_slot(self, slot_index: int, item: Optional[ItemData]) -> Slot:
+        """
+        Set an item in a specific slot.
+
+        Updates the slot at the given index with item data. If item is None,
+        the slot is cleared. The slot's item and item_count are updated accordingly.
+
+        Parameters
+        ----------
+        slot_index: int
+            Index of the slot to modify (0-based)
+        item: Optional[ItemData]
+            Item data to place in slot, or None to clear the slot
+            Expected keys: 'item_id', 'item_damage', 'nbt', 'item_count'
+
+        Returns
+        -------
+        Slot
+            The modified slot object
+
+        Raises
+        ------
+        IndexError
+            If slot_index is out of bounds (< 0 or >= slot_count)
+        """
+        if not (0 <= slot_index < len(self.slots)):
+            raise IndexError(f'Slot index {slot_index} out of bounds (0-{len(self.slots) - 1})')
+
+        slot = self.slots[slot_index]
+        if item is not None:
+            slot.item = Item(item['item_id'], item['item_damage'], item['nbt'])
+            slot.item_count = item['item_count']
+        else:
+            slot.item = None
+            slot.item_count = 0
+        return slot
 
     def get_slot(self, slot_id: int) -> Optional[Slot]:
+        """
+        Retrieve a slot by its index.
+
+        Parameters
+        ----------
+        slot_id: int
+            Index of the slot to retrieve (0-based)
+
+        Returns
+        -------
+        Optional[Slot]
+            The slot at the given index, or None if index is out of bounds
+        """
         if 0 <= slot_id < len(self.slots):
             return self.slots[slot_id]
         return None
 
     def set_property(self, property_id: int, value: int) -> None:
+        """
+        Set a window-specific property.
+
+        Properties are used for window-specific data like furnace cooking progress,
+        enchantment table seed, etc. The meaning depends on the window type.
+
+        Parameters
+        ----------
+        property_id: int
+            Identifier for the property type
+        value: int
+            New value for the property
+        """
         self.properties[property_id] = value
-    
-    def close(self) -> None:
-        self.is_open = False
+
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, slot_count={self.slot_count}, is_open={self.is_open}>"
-
-
-class FurnaceWindow(Window):
-    """
-    Furnace window with smelting functionality.
-
-    Attributes
-    ----------
-    fuel_left: int
-        Remaining fuel time in ticks
-    max_fuel_time: int
-        Maximum fuel burn time in ticks
-    cook_progress: int
-        Current cooking progress in ticks
-    max_cook_time: int
-        Maximum cooking time in ticks
-    """
-    __slots__ = ('fuel_left', 'max_fuel_time', 'cook_progress', 'max_cook_time')
-
-    def __init__(self, window_id: int, window_type: str, title: str) -> None:
-        super().__init__(window_id, window_type, title, 3)
-        self.fuel_left = 0
-        self.max_fuel_time = 0
-        self.cook_progress = 0
-        self.max_cook_time = 0
-
-    def on_property_changed(self, property_id: int, value: int) -> None:
-        """
-        Handle furnace property changes.
-
-        Parameters
-        ----------
-        property_id: int
-            Property ID (0=fuel_left, 1=max_fuel_time, 2=cook_progress, 3=max_cook_time)
-        value: int
-            Property value
-        """
-        if property_id == 0:
-            self.fuel_left = value
-        elif property_id == 1:
-            self.max_fuel_time = value
-        elif property_id == 2:
-            self.cook_progress = value
-        elif property_id == 3:
-            self.max_cook_time = value
-
-    @property
-    def fuel_progress(self) -> float:
-        """
-        Get fuel progress as percentage.
-
-        Returns
-        -------
-        float
-            Fuel progress (0.0 to 1.0)
-        """
-        if self.max_fuel_time == 0:
-            return 0.0
-        return self.fuel_left / self.max_fuel_time
-
-    @property
-    def cooking_progress(self) -> float:
-        """
-        Get cooking progress as percentage.
-
-        Returns
-        -------
-        float
-            Cooking progress (0.0 to 1.0)
-        """
-        if self.max_cook_time == 0:
-            return 0.0
-        return self.cook_progress / self.max_cook_time
-
-    @property
-    def is_burning(self) -> bool:
-        """
-        Check if furnace is currently burning fuel.
-
-        Returns
-        -------
-        bool
-            True if burning, False otherwise
-        """
-        return self.fuel_left > 0
-
-    @property
-    def is_cooking(self) -> bool:
-        """
-        Check if furnace is currently cooking.
-
-        Returns
-        -------
-        bool
-            True if cooking, False otherwise
-        """
-        return self.cook_progress > 0
-
-
-class EnchantingWindow(Window):
-    """
-    Enchanting table window with enchantment functionality.
-
-    Attributes
-    ----------
-    enchantment_seed: int
-        Random seed for enchantments
-    level_requirements: list of int
-        XP level requirements for each slot
-    enchantment_ids: list of int
-        Enchantment IDs for each slot
-    enchantment_levels: list of int
-        Enchantment levels for each slot
-    """
-
-    __slots__ = ('enchantment_seed', 'level_requirements', 'enchantment_ids', 'enchantment_levels')
-
-    def __init__(self, window_id: int, window_type: str, title: str) -> None:
-        super().__init__(window_id, window_type, title, 2)
-        self.enchantment_seed = 0
-        self.level_requirements = [0, 0, 0]
-        self.enchantment_ids = [-1, -1, -1]
-        self.enchantment_levels = [-1, -1, -1]
-
-
-    def on_property_changed(self, property_id: int, value: int) -> None:
-        """
-        Handle enchanting table property changes.
-
-        Parameters
-        ----------
-        property_id: int
-            Property ID (0-2=level requirements, 3=seed, 4-6=enchant IDs, 7-9=enchant levels)
-        value: int
-            Property value
-        """
-        if 0 <= property_id <= 2:
-            # Level requirements for slots
-            self.level_requirements[property_id] = value
-            slot_name = ['top', 'middle', 'bottom'][property_id]
-            _logger.debug(f"Enchanting {slot_name} slot level requirement: {value}")
-        elif property_id == 3:
-            # Enchantment seed
-            self.enchantment_seed = value
-        elif 4 <= property_id <= 6:
-            # Enchantment IDs for hover
-            slot_index = property_id - 4
-            self.enchantment_ids[slot_index] = value
-            slot_name = ['top', 'middle', 'bottom'][slot_index]
-            if value == -1:
-                _logger.debug(f"Enchanting {slot_name} slot: No enchantment")
-            else:
-                _logger.debug(f"Enchanting {slot_name} slot enchantment ID: {value}")
-        elif 7 <= property_id <= 9:
-            # Enchantment levels for hover
-            slot_index = property_id - 7
-            self.enchantment_levels[slot_index] = value
-            slot_name = ['top', 'middle', 'bottom'][slot_index]
-            if value == -1:
-                _logger.debug(f"Enchanting {slot_name} slot: No level")
-            else:
-                _logger.debug(f"Enchanting {slot_name} slot level: {value}")
-
-    def get_enchantment_info(self, slot_index: int) -> Optional[Dict[str, int]]:
-        """
-        Get enchantment information for a specific slot.
-
-        Parameters
-        ----------
-        slot_index: int
-            Slot index (0=top, 1=middle, 2=bottom)
-
-        Returns
-        -------
-        dict
-            Dictionary with level_requirement, enchantment_id, and enchantment_level
-        """
-        if 0 <= slot_index <= 2:
-            return {
-                'level_requirement': self.level_requirements[slot_index],
-                'enchantment_id': self.enchantment_ids[slot_index],
-                'enchantment_level': self.enchantment_levels[slot_index]
-            }
-        return None
-
-
-class BeaconWindow(Window):
-    """
-    Beacon window with effect functionality.
-
-    Attributes
-    ----------
-    power_level: int
-        Beacon power level (0-4)
-    first_effect: int or None
-        Primary effect ID
-    second_effect: int or None
-        Secondary effect ID
-    """
-
-    __slots__ = ('power_level', 'first_effect', 'second_effect')
-
-    def __init__(self, window_id: int, window_type: str, title: str) -> None:
-        super().__init__(window_id, window_type, title, 1)
-        self.power_level = 0
-        self.first_effect = None
-        self.second_effect = None
-
-    def on_property_changed(self, property_id: int, value: int) -> None:
-        """
-        Handle beacon property changes.
-
-        Parameters
-        ----------
-        property_id: int
-            Property ID (0=power_level, 1=first_effect, 2=second_effect)
-        value: int
-            Property value
-        """
-        if property_id == 0:
-            self.power_level = value
-            _logger.debug(f"Beacon power level: {value}")
-        elif property_id == 1:
-            self.first_effect = value if value != -1 else None
-        elif property_id == 2:
-            self.second_effect = value if value != -1 else None
-
-
-class AnvilWindow(Window):
-    """
-    Anvil window with repair functionality.
-
-    Attributes
-    ----------
-    repair_cost: int
-        XP cost for the current repair/rename operation
-    """
-
-    __slots__ = ('repair_cost',)
-
-    def __init__(self, window_id: int, window_type: str, title: str) -> None:
-        super().__init__(window_id, window_type, title, 3)
-        self.repair_cost = 0
-
-
-    def on_property_changed(self, property_id: int, value: int) -> None:
-        """
-        Handle anvil property changes.
-
-        Parameters
-        ----------
-        property_id: int
-            Property ID (0=repair_cost)
-        value: int
-            Property value
-        """
-        if property_id == 0:
-            self.repair_cost = value
-            _logger.debug(f"Anvil repair cost: {value} XP levels")
-
-
-class BrewingStandWindow(Window):
-    """
-    Brewing stand window with brewing functionality.
-
-    Attributes
-    ----------
-    brew_time: int
-        Current brewing time (0-400 ticks)
-    fuel_time: int
-        Current fuel time (0-20 ticks)
-    """
-
-    __slots__ = ('brew_time', 'fuel_time')
-
-    def __init__(self, window_id: int, window_type: str, title: str) -> None:
-        super().__init__(window_id, window_type, title, 5)
-        self.brew_time = 0
-        self.fuel_time = 0
-
-    def on_property_changed(self, property_id: int, value: int) -> None:
-        """
-        Handle brewing stand property changes.
-
-        Parameters
-        ----------
-        property_id: int
-            Property ID (0=brew_time, 1=fuel_time)
-        value: int
-            Property value
-        """
-        if property_id == 0:
-            # Brew time (0-400)
-            self.brew_time = value
-        elif property_id == 1:
-            # Fuel time (0-20)
-            self.fuel_time = value
-
-    @property
-    def brew_progress(self) -> float:
-        """
-        Get brewing progress as percentage.
-
-        Returns
-        -------
-        float
-            Brewing progress (0.0 to 1.0)
-        """
-        return (400 - self.brew_time) / 400.0
-
-    @property
-    def fuel_progress(self) -> float:
-        """
-        Get fuel progress as percentage.
-
-        Returns
-        -------
-        float
-            Fuel progress (0.0 to 1.0)
-        """
-        return self.fuel_time / 20.0
-
-    @property
-    def is_brewing(self) -> bool:
-        """
-        Check if brewing stand is currently brewing.
-
-        Returns
-        -------
-        bool
-            True if brewing, False otherwise
-        """
-        return self.brew_time > 0
-
-
-class ChestWindow(Window):
-    """Standard chest window."""
-
-    def __init__(self, window_id: int, window_type: str, slot_count: int, title: str) -> None:
-        super().__init__(window_id, window_type, title, slot_count)
-
-
-class HopperWindow(Window):
-    """Hopper window with 5 slots."""
-
-    def __init__(self, window_id: int, window_type: str, title: str) -> None:
-        super().__init__(window_id, window_type, title, 5)
+        return f"<{self.__class__.__name__} id={self.id}, slot_count={self.slot_count}>"
