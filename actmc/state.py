@@ -949,7 +949,7 @@ class ConnectionState:
                 gamemode = protocol.read_varint(buffer)
                 ping = protocol.read_varint(buffer)
                 has_display_name = protocol.read_bool(buffer)
-                display_name = protocol.read_chat(buffer) if has_display_name else None
+                display_name = Message(protocol.read_chat(buffer)) if has_display_name else None
 
                 player = tab.TabPlayer(
                     name=name,

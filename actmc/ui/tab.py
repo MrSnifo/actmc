@@ -1,5 +1,5 @@
 from typing import List, Optional
-
+from .chat import Message
 
 class Property:
     """
@@ -59,7 +59,7 @@ class TabPlayer:
         - 3: Spectator mode
     ping: int
         Network latency in milliseconds.
-    display_name: Optional[str]
+    display_name: Optional[Message]
         Custom display name with formatting.
     """
     __slots__ = ('name', 'properties', 'gamemode', 'ping', 'display_name')
@@ -69,12 +69,12 @@ class TabPlayer:
                  properties: List[Property],
                  gamemode: int,
                  ping: int,
-                 display_name: Optional[str]) -> None:
+                 display_name: Optional[Message]) -> None:
         self.name: str = name
         self.properties: List[Property] = properties
         self.gamemode: int = gamemode
         self.ping: int = ping
-        self.display_name: Optional[str] = display_name
+        self.display_name: Optional[Message] = display_name
 
     def get_property(self, name: str) -> Optional[Property]:
         """
