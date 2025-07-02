@@ -28,8 +28,8 @@ from . import entities, math, protocol
 from typing import TYPE_CHECKING
 from .ui.chat import Message
 from .ui import tab, gui
-from .chunk import *
 from .user import User
+from .chunk import *
 import asyncio
 
 from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
@@ -1222,12 +1222,30 @@ class ConnectionState:
     async def parse_0x3f(self, buffer: protocol.ProtocolBuffer) -> None:
         """Entity Equipment (Packet ID: 0x3F)"""
         entity_id = protocol.read_varint(buffer)
-        slot = protocol.read_varint(buffer)
-        item = protocol.read_slot(buffer)
+        slot_index = protocol.read_varint(buffer)
+        item_data = protocol.read_slot(buffer)
 
-        """if entity_id in self.entities:
-            print('entity_equipment',  self.entities[entity_id], slot, item)"""
+        if entity_id in self.entities:
+            entity = self.entities[entity_id]
 
+            if not isinstance(entity, entities.entity.Living):
+                _logger.debug(f"Entity {entity_id} is not a Living entity, skipping equipment")
+                return
+
+            slot = gui.Slot(slot_index)
+            if item_data:
+                slot.item = entities.misc.Item(
+                    item_data['item_id'],
+                    item_data['item_damage'],
+                    item_data['nbt']
+                )
+                slot.item_count = item_data['item_count']
+            else:
+                slot.item = None
+                slot.item_count = 0
+
+            entity.set_equipment(slot)
+            self._dispatch('entity_equipment', entity, slot)
 
     async def parse_0x32(self, buffer: protocol.ProtocolBuffer) -> None:
         """Destroy Entities (Packet ID: 0x32)"""

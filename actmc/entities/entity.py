@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Dict, Any, Union, TypeVar, Optional
+    from ..ui import gui
     from ..math import Vector3D, Rotation
     T = TypeVar('T', int, str, default=int)
 
@@ -393,7 +394,46 @@ class Entity(BaseEntity[int]):
 class Living(Entity):
     """Living entity extending Entity with health and status effects."""
 
-    __slots__ = ()
+    __slots__ = ('_equipment',)
+
+    def __init__(self, entity_id: int, uuid: str, position: Vector3D[float], rotation: Rotation,
+                 metadata: Dict[int, Any]):
+        super().__init__(entity_id, uuid, position, rotation, metadata)
+        self._equipment: Dict[int, gui.Slot] = {}
+
+    def set_equipment(self, slot: gui.Slot) -> None:
+        """
+        Set equipment in the specified slot.
+
+        Returns
+        -------
+        None
+        """
+        self._equipment[slot.index] = slot
+
+    @property
+    def equipment(self) -> Dict[int, gui.Slot]:
+        """
+        Get all equipment slots.
+
+        Returns
+        -------
+        Dict[int, gui.Slot]
+            Dictionary mapping slot IDs to their equipment slots.
+        """
+        return self._equipment
+
+    @property
+    def has_equipment(self) -> bool:
+        """
+        Check if the entity has any equipment.
+
+        Returns
+        -------
+        bool
+            True if entity has equipment, False otherwise.
+        """
+        return bool(self._equipment)
 
     @property
     def hand_states(self) -> int:
