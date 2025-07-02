@@ -74,8 +74,6 @@ class Window:
         List of all slots in this window.
     properties: Dict[int, Any]
         Window-specific properties (furnace progress, etc.).
-    is_open: bool
-        Whether this window is currently open.
     """
     __slots__ = ('id', 'type', 'title', 'slot_count', 'entity_id', 'slots', 'properties', 'is_open')
 
@@ -86,7 +84,6 @@ class Window:
         self.slot_count: int = slot_count
         self.slots: List[Slot] = [Slot(i) for i in range(slot_count)]
         self.properties: Dict[int, Any] = {}
-        self.is_open: bool = True
 
     def set_slot(self, slot_index: int, item: Optional[ItemData]) -> Slot:
         """
