@@ -4,7 +4,6 @@ from .entities.entity import BaseEntity
 from .entities.player import Player
 from typing import TYPE_CHECKING, overload
 from .math import Vector3D, Rotation
-from .ui import tab
 
 if TYPE_CHECKING:
     from typing import Literal, Dict, ClassVar, Optional
@@ -97,7 +96,7 @@ class User(Player):
         elif rotation is not None:
             await self._state.send_player_look(self.rotation, on_ground)
         else:
-            await self._state.send_player_packet(on_ground)
+            await self._state.send_player_ground(on_ground)
 
     async def sneak(self, state: bool = True) -> None:
         """
@@ -167,7 +166,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand used to interact (0 = main hand, 1 = off-hand).
         """
-        await self._state.send_use_entity(entity.id, action=0, hand=hand)
+        await self._state.send_use_entity_interact(entity.id, hand=hand)
 
     async def attack(self, entity: BaseEntity) -> None:
         """
@@ -178,7 +177,7 @@ class User(Player):
         entity: BaseEntity
             The target entity.
         """
-        await self._state.send_use_entity(entity.id, action=1)
+        await self._state.send_use_entity_attack(entity.id)
 
     async def interact_at(self, entity: BaseEntity, hitbox: Vector3D[float], hand: Literal[0, 1] = 0) -> None:
         """
@@ -193,7 +192,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand used to interact (0 = main hand, 1 = off-hand).
         """
-        await self._state.send_use_entity(entity.id, action=2, hitbox=hitbox, hand=hand)
+        await self._state.send_use_entity_interact_at(entity.id, hitbox=hitbox, hand=hand)
 
     async def swing_arm(self, hand: Literal[0, 1] = 0) -> None:
         """

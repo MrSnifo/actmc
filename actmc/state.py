@@ -35,7 +35,7 @@ import asyncio
 from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Callable, Dict, List, Optional, Tuple
     from .gateway import MinecraftSocket
     from .tcp import TcpClient
 
@@ -176,7 +176,7 @@ class ConnectionState:
 
     # ============================== Network Operations ==============================
 
-    async def send_packet(self, packet_id: int, buffer: bytes) -> None:
+    async def send_packet(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
         """
         Send a packet to the server.
 
@@ -191,37 +191,22 @@ class ConnectionState:
         if not socket:
             raise RuntimeError("Socket is not initialized or not connected")
 
-        await socket.write_packet(packet_id=packet_id, data=buffer)
+        await socket.write_packet(packet_id=packet_id, data=buffer.getvalue())
 
     async def send_initial_packets(self, username: str) -> None:
-        """
-        Send initial handshake and login packets to establish connection.
+        await self.send_packet(0x00, self.tcp.handshake_packet)
 
-        Args:
-            username: Player username for login
+        login_packet = self.tcp.login_packet(username)
+        await self.send_packet(0x00, login_packet)
 
-        Raises:
-            RuntimeError: If TCP client is not properly configured
-        """
-        try:
-            handshake_packet = self.tcp.build_handshake_packet
-            login_packet = self.tcp.build_login_packet(username)
+        # Performance warning for chunk loading
+        if self._load_chunks:
+            _logger.warning(
+                "Chunk loading is enabled - may cause performance issues "
+                "and increased memory usage on large worlds"
+            )
 
-            await self.send_packet(0x00, handshake_packet.getvalue())
-            await self.send_packet(0x00, login_packet.getvalue())
-
-            # Performance warning for chunk loading
-            if self._load_chunks:
-                _logger.warning(
-                    "Chunk loading is enabled - may cause performance issues "
-                    "and increased memory usage on large worlds"
-                )
-
-            self._dispatch('handshake')
-
-        except Exception as e:
-            _logger.error(f"Failed to send initial packets: {e}")
-            raise
+        self._dispatch('handshake')
 
     # ============================== World State Management ==============================
 
@@ -417,194 +402,62 @@ class ConnectionState:
             self._dispatch('error', packet_id, error)
 
     # ============================== Client Actions ==============================
+    async def send_client_status(self, action_id: int) -> None:
+        buffer = self.tcp.client_status(action_id)
+        await self.send_packet(0x03, buffer)
 
-    async def send_use_entity(
-            self,
-            target_id: int,
-            action: Literal[0, 1, 2],
-            hitbox: Optional[math.Vector3D[float]] = None,
-            hand: Optional[Literal[0, 1]] = None) -> None:
-        """Send a Use Entity packet to the server. """
-        buffer =protocol.ProtocolBuffer()
-        buffer.write(protocol.write_varint(target_id))
-        buffer.write(protocol.write_varint(action))
+    async def send_player_teleport_confirmation(self, teleport_id: int) -> None:
+        buffer = self.tcp.player_teleport_confirmation(teleport_id)
+        await self.send_packet(0x00, buffer)
 
-        if action == 2:
-            buffer.write(protocol.pack_float(hitbox.x or 0.0))
-            buffer.write(protocol.pack_float(hitbox.y or 0.0))
-            buffer.write(protocol.pack_float(hitbox.z or 0.0))
-
-        if action in (0, 2):
-            buffer.write(protocol.write_varint(hand if hand is not None else 0))
-
-        await self.send_packet(0x0A, buffer.getvalue())
-
-    async def send_swing_arm(self, hand: int = 0) -> None:
-        """
-        Send the Animation (Swing Arm) packet (0x1D).
-
-        Parameters
-        ----------
-        hand: int
-            Hand used for the animation.
-            0 = main hand
-            1 = off-hand
-        """
-        buffer = protocol.ProtocolBuffer()
-        buffer.write(protocol.write_varint(hand))
-        await self.send_packet(0x1D, buffer.getvalue())
-
-    async def send_use_item(self, hand: int = 0) -> None:
-        """
-        Send the Use Item packet (0x20).
-
-        Sent when pressing the Use Item key (default: right click) with an item in hand.
-
-        Parameters
-        ----------
-        hand: int
-            Hand used for the animation.
-            0 = main hand
-            1 = off-hand
-        """
-        buffer = protocol.ProtocolBuffer()
-        buffer.write(protocol.write_varint(hand))
-        await self.send_packet(0x20, buffer.getvalue())
-
-    async def send_confirm_transaction(self, window_id: int, action_number: int, accepted: bool) -> None:
-        """
-        Send the Confirm Transaction packet (0x05).
-
-        If a transaction sent by the client was not accepted, the server will reply with a
-        Confirm Transaction (clientbound) packet with the Accepted field set to false.
-        When this happens, the client must send this packet to apologize (as with movement),
-        otherwise the server ignores any successive transactions.
-
-        Parameters
-        ----------
-        window_id: int
-            The ID of the window that the action occurred in.
-        action_number: int
-            Every action that is to be accepted has a unique number. This number is an
-            incrementing integer (starting at 1) with separate counts for each window ID.
-        accepted: bool
-            Whether the action was accepted.
-        """
-        buffer = protocol.ProtocolBuffer()
-        buffer.write(protocol.pack_byte(window_id))
-        buffer.write(protocol.pack_short(action_number))
-        buffer.write(protocol.pack_bool(accepted))
-        await self.send_packet(0x05, buffer.getvalue())
-
-    async def send_player_digging(self,
-                                  status: int,
-                                  position: math.Vector3D[int] = math.Vector3D(0, 0, 0),
-                                  face: int = 0) -> None:
-        """
-        Send the Player Digging packet (0x14).
-
-        Parameters
-        ----------
-        status: int
-            The action the player is taking against the block.
-
-            Valid values:
-
-            0 : Started digging
-
-            1 : Cancelled digging
-
-            2 : Finished digging
-
-            3 : Drop item stack (position set to 0,0,0; face = down)
-
-            4 : Drop item (position set to 0,0,0; face = down)
-
-            5 : Shoot arrow / finish eating (position set to 0,0,0; face = down)
-
-            6 : Swap item in hand (position set to 0,0,0; face = down)
-
-        position: math.Vector3D[int]
-            The block position (x, y, z). Ignored if status is 3-6.
-
-        face: int
-            The face of the block being hit (0=down,1=up,2=north,3=south,4=west,5=east).
-
-            Ignored if status is 3-6. Defaults to 0.
-        """
-        buffer = protocol.ProtocolBuffer()
-        # Write fields in correct order: Status, Position, Face
-        buffer.write(protocol.write_varint(status))
-        buffer.write(protocol.pack_position(position.x, position.y, position.z))  # Position as single field
-        buffer.write(protocol.pack_byte(face))
-        await self.send_packet(0x14, buffer.getvalue())
-
-    async def send_client_status(self, action_id: Literal[0, 1]) -> None:
-        """Send a Client Status packet to the server."""
-        await self.send_packet(0x03, protocol.write_varint(action_id))
-
-    async def get_statistics(self) -> Dict[str, int]:
-        """
-        Request and retrieve player statistics from the server.
-
-        Returns:
-            Dictionary of player statistics
-        """
-        if not self._has_waiters('0x07'):
-            await self.send_client_status(1)
-
-        result: Dict[str, int] = await self._wait_for('0x07')
-        return result
-
-    async def send_player_packet(self, on_ground: bool) -> None:
-        """Send Player packet (0x0C) - indicates if player is on ground"""
-        data = protocol.pack_bool(on_ground)
-        await self.send_packet(0x0C, data)
+    async def send_player_ground(self, on_ground: bool) -> None:
+        buffer = self.tcp.player_ground(on_ground)
+        await self.send_packet(0x0C, buffer)
 
     async def send_player_position(self, position: math.Vector3D[float], on_ground: bool) -> None:
-        """Send Player Position packet (0x0D) - updates XYZ position"""
-        data = (protocol.pack_double(position.x) +
-                protocol.pack_double(position.y) +
-                protocol.pack_double(position.z) +
-                protocol.pack_bool(on_ground))
-        await self.send_packet(0x0D, data)
+        buffer = self.tcp.player_position(position, on_ground)
+        await self.send_packet(0x0D, buffer)
 
     async def send_player_look(self, rotation: math.Rotation, on_ground: bool) -> None:
-        """Send Player Look packet (0x0F) - updates rotation"""
-        data = (protocol.pack_float(rotation.yaw) +
-                protocol.pack_float(rotation.pitch) +
-                protocol.pack_bool(on_ground))
-        await self.send_packet(0x0F, data)
-
-    async def send_entity_action(self, entity_id: int, action_id: int, jump_boost: int = 0) -> None:
-        """Send Entity Action packet (0x15) - notifies server of player actions
-
-        Parameters
-        ----------
-        entity_id : int
-            The ID of the entity performing the action.
-        action_id : int
-            The ID of the action being performed.
-        jump_boost : int, optional
-            Used only for 'start jump with horse' action (action_id == 5).
-        """
-        data = (
-                protocol.write_varint(entity_id) +
-                protocol.write_varint(action_id) +
-                protocol.write_varint(jump_boost)
-        )
-        await self.send_packet(0x15, data)
+        buffer = self.tcp.player_look(rotation, on_ground)
+        await self.send_packet(0x0F, buffer)
 
     async def send_player_position_and_look(self, position: math.Vector3D[float], rotation: math.Rotation,
                                       on_ground: bool) -> None:
-        """Send Player Position And Look packet (0x0E) - combines position and rotation"""
-        data = (protocol.pack_double(position.x) +
-                protocol.pack_double(position.y) +
-                protocol.pack_double(position.z) +
-                protocol.pack_float(rotation.yaw) +
-                protocol.pack_float(rotation.pitch) +
-                protocol.pack_bool(on_ground))
-        await self.send_packet(0x0E, data)
+        buffer = self.tcp.player_position_and_look_packet(position, rotation, on_ground)
+        await self.send_packet(0x0E, buffer)
+
+    async def send_use_item(self, hand: int) -> None:
+        buffer = self.tcp.use_item(hand)
+        await self.send_packet(0x20, buffer)
+
+    async def send_swing_arm(self, hand: int) -> None:
+        buffer = self.tcp.swing_arm(hand)
+        await self.send_packet(0x1D, buffer)
+
+    async def send_player_digging(self, status: int, position: math.Vector3D[int], face: int) -> None:
+        buffer = self.tcp.player_digging(status, position, face)
+        await self.send_packet(0x14, buffer)
+
+    async def send_confirm_window_transaction(self, window_id: int, action_number: int, accepted: bool) -> None:
+        buffer = self.tcp.confirm_window_transaction(window_id, action_number, accepted)
+        await self.send_packet(0x05, buffer)
+
+    async def send_entity_action(self, entity_id: int, action_id: int, jump_boost: int = 0) -> None:
+        buffer = self.tcp.entity_action(entity_id, action_id, jump_boost)
+        await self.send_packet(0x15, buffer)
+
+    async def send_use_entity_interact(self, target_id: int, hand: int) -> None:
+        buffer = self.tcp.use_entity_interact(target_id, hand)
+        await self.send_packet(0x0A, buffer)
+
+    async def send_use_entity_attack(self, target_id: int) -> None:
+        buffer = self.tcp.use_entity_attack(target_id)
+        await self.send_packet(0x0A, buffer)
+
+    async def send_use_entity_interact_at(self, target_id: int, hitbox: math.Vector3D[float], hand: int) -> None:
+        buffer = self.tcp.use_entity_interact_at(target_id, hitbox, hand)
+        await self.send_packet(0x0A, buffer)
 
     # ============================== Packet Parsers ==============================
 
@@ -859,8 +712,7 @@ class ConnectionState:
         self.user.position = math.Vector3D(x, y, z)
         self.user.rotation = math.Rotation(yaw, pitch)
 
-        # Teleport Confirmation.
-        await self.send_packet(0x00, protocol.write_varint(teleport_id))
+        await self.send_player_teleport_confirmation(teleport_id)
         self._dispatch('player_position_and_look', self.user.position, self.user.rotation)
 
     async def parse_0x46(self, data: protocol.ProtocolBuffer) -> None:
@@ -1346,7 +1198,7 @@ class ConnectionState:
         window_id = protocol.read_byte(buffer)
         action_number = protocol.read_short(buffer)
         accepted = protocol.read_bool(buffer)
-        await self.send_confirm_transaction(window_id, action_number, accepted)
+        await self.send_confirm_window_transaction(window_id, action_number, accepted)
         self._dispatch('transaction_confirmed', window_id, action_number, accepted)
 
     async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:
