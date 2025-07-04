@@ -8,6 +8,7 @@ from .math import Vector3D, Rotation
 if TYPE_CHECKING:
     from typing import Literal, Dict, ClassVar, Optional
     from .state import ConnectionState
+    from .ui import gui
 
 
 class User(Player):
@@ -20,7 +21,8 @@ class User(Player):
                  'health', 'food', 'food_saturation',
                  'level', 'total_experience', 'experience_bar',
                  'held_slot',
-                 'spawn_point')
+                 'spawn_point',
+                 'invulnerable', 'flying', 'allow_flying', 'creative_mode', 'flying_speed', 'fov_modifier')
 
     GAMEMODE: ClassVar[Dict[int, Literal['survival', 'creative', 'adventure', 'spectator']]] = {
         0: 'survival',
@@ -37,8 +39,8 @@ class User(Player):
 
     if TYPE_CHECKING:
         username: str
-        gamemode: Literal['survival', 'creative', 'adventure', 'spectator']
-        dimension: Literal['nether', 'overworld', 'end']
+        gamemode: int
+        dimension: int
 
         # Health
         food: int
@@ -51,8 +53,17 @@ class User(Player):
 
         # Inventory
         held_slot: int
+
         # Spawn
         spawn_point: Vector3D[float]
+
+        # Abilities
+        invulnerable: bool
+        flying: bool
+        allow_flying: bool
+        creative_mode: bool
+        flying_speed: float
+        fov_modifier: float
 
     def __init__(self, entity_id: int, username: str, uuid: str, *, state: ConnectionState) -> None:
         super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {},
@@ -63,6 +74,10 @@ class User(Player):
     def _update(self, username: str, uuid: str) -> None:
         self.username = username
         self.uuid = uuid
+
+    @property
+    def inventory(self) -> Optional[gui.Window]:
+        return self._state.windows.get(0)
 
     async def translate(self,
                         position: Optional[Vector3D[float]] = None,

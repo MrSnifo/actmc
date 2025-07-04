@@ -25,24 +25,29 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
 from .entity import Entity, Living
 
 if TYPE_CHECKING:
     from typing import ClassVar, Tuple, Optional, Dict, Any
+    from ..types.entities import ItemData
 
-__all__ = ('ItemStack', 'Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock',
+__all__ = ('DroppedItem', 'Item', 'XPOrb', 'LightningBolt', 'AreaEffectCloud', 'ArmorStand', 'FallingBlock',
            'FireworksRocket', 'TNTPrimed', 'LeashKnot', 'EvocationFangs', 'FishingHook', 'EnderCrystal')
 
 
 class Item:
     """Represents a Minecraft item."""
 
-    __slots__ = ('id', 'damage', 'nbt')
+    __slots__ = ('id', 'count', 'damage', 'nbt')
 
-    def __init__(self, item_id: int, item_damage: int = 0, nbt: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, item_id: int, count: int = 1, item_damage: int = 0,
+                 nbt: Optional[Dict[str, Any]] = None) -> None:
         self.id: int = item_id
+        self.count: int = count
         self.damage: int = item_damage
         self.nbt: Optional[Dict[str, Any]] = nbt
+
 
     @property
     def has_nbt(self) -> bool:
@@ -110,8 +115,24 @@ class Item:
 
         return enchants
 
+    def to_dict(self) -> ItemData:
+        """
+        Convert the item to ItemData format.
+
+        Returns
+        -------
+        ItemData
+            Dictionary containing item data
+        """
+        return {
+            'item_id': self.id,
+            'item_damage': self.damage,
+            'item_count': self.count,
+            'nbt': self.nbt
+        }
+
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, damage={self.damage}>"
+        return f"<{self.__class__.__name__} id={self.id}, count={self.count}>"
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another Item."""
@@ -121,7 +142,7 @@ class Item:
         return self.id == other.id and self.damage == other.damage and self.nbt == other.nbt
 
 
-class ItemStack(Entity):
+class DroppedItem(Entity):
     """
     Item entity representing a dropped item in the world.
 
@@ -137,6 +158,7 @@ class ItemStack(Entity):
     """
 
     __slots__ = ()
+
 
     ENTITY_TYPE: ClassVar[str] = 'minecraft:item'
     BOUNDING: ClassVar[Tuple[float, float]] = (0.25, 0.25)
@@ -167,23 +189,9 @@ class ItemStack(Entity):
         data = self._item_stack_data
 
         if data:
-            return Item(data.get('item_id', 0), data.get('item_damage', 0), data.get('nbt', None))
+            return Item(data.get('item_id', 0), data.get('item_count', 0), data.get('item_damage', 0),
+                        data.get('nbt', None))
         return None
-
-    @property
-    def count(self) -> int:
-        """
-        Number of items in the stack.
-
-        Returns
-        -------
-        int
-            Item count, 0 if no item.
-        """
-        data = self._item_stack_data
-        if data is None:
-            return 0
-        return int(data.get('item_count', 0))
 
     @property
     def has_item(self) -> bool:
@@ -196,18 +204,6 @@ class ItemStack(Entity):
             True if item stack is present.
         """
         return self._item_stack_data is not None
-
-    @property
-    def is_valid_item(self) -> bool:
-        """
-        Whether the item entity contains a valid item.
-
-        Returns
-        -------
-        bool
-            True if item is present and has a positive count.
-        """
-        return self.has_item and self.count > 0
 
 
 class XPOrb(Entity):

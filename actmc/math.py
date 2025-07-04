@@ -215,6 +215,17 @@ class Vector3D[T]:
         """
         return Vector3D(int(self.x), int(self.y), int(self.z))
 
+    def to_2d(self) -> Vector2D[T]:
+        """
+        Convert a 3D vector to a 2D vector by removing the Y (height) component.
+
+        Returns
+        -------
+        Vector2D[int]
+            A 2D vector with the X and Z components of this vector
+        """
+        return Vector2D(self.x, self.z)
+
     def magnitude(self) -> float:
         """
         Calculate the magnitude (length) of the vector.

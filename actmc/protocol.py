@@ -2,9 +2,10 @@ import struct
 import json
 import uuid
 import io
+
 from .errors import DataTooShortError, InvalidDataError
 from typing import Union, Optional, Tuple, Dict, List, Any
-from .types.entities import ItemData
+from .types import entities, advancement
 
 class ProtocolBuffer:
     """A wrapper around BytesIO with protocol-specific methods"""
@@ -395,6 +396,101 @@ def read_position(buffer: ProtocolBuffer) -> Tuple[int, int, int]:
     return x, y, z
 
 
+def pack_nbt(nbt_data: Dict[str, Any]) -> bytes:
+    """Pack NBT data to bytes - minimal implementation for slot data"""
+    buffer = bytearray()
+
+    # NBT starts with a compound tag (type 10)
+    buffer.extend(pack_ubyte(10))
+
+    # Write empty root name (compound name is empty string)
+    buffer.extend(pack_ushort(0))
+
+    # Write compound contents
+    for name, value in nbt_data.items():
+        tag_type = _get_nbt_type(value)
+        buffer.extend(pack_ubyte(tag_type))
+        buffer.extend(_pack_nbt_string(name))
+        buffer.extend(_pack_nbt_payload(value, tag_type))
+
+    # End tag
+    buffer.extend(pack_ubyte(0))
+
+    return bytes(buffer)
+
+
+def _pack_nbt_string(value: str) -> bytes:
+    """Pack NBT string (length-prefixed with unsigned short)"""
+    encoded = value.encode('utf-8')
+    return pack_ushort(len(encoded)) + encoded
+
+
+def _pack_nbt_payload(value: Any, tag_type: int) -> bytes:
+    """Pack the payload of an NBT tag based on its type"""
+    if tag_type == 1:  # Byte
+        return pack_byte(value)
+    elif tag_type == 2:  # Short
+        return pack_short(value)
+    elif tag_type == 3:  # Int
+        return pack_int(value)
+    elif tag_type == 4:  # Long
+        return pack_long(value)
+    elif tag_type == 5:  # Float
+        return pack_float(value)
+    elif tag_type == 6:  # Double
+        return pack_double(value)
+    elif tag_type == 8:  # String
+        return _pack_nbt_string(value)
+    elif tag_type == 9:  # List
+        buffer = bytearray()
+        if not value:
+            buffer.extend(pack_ubyte(0))  # Empty list type
+            buffer.extend(pack_int(0))  # Length 0
+        else:
+            list_type = _get_nbt_type(value[0])
+            buffer.extend(pack_ubyte(list_type))
+            buffer.extend(pack_int(len(value)))
+            for item in value:
+                buffer.extend(_pack_nbt_payload(item, list_type))
+        return bytes(buffer)
+    elif tag_type == 10:  # Compound
+        buffer = bytearray()
+        for name, item_value in value.items():
+            item_type = _get_nbt_type(item_value)
+            buffer.extend(pack_ubyte(item_type))
+            buffer.extend(_pack_nbt_string(name))
+            buffer.extend(_pack_nbt_payload(item_value, item_type))
+        buffer.extend(pack_ubyte(0))  # End tag
+        return bytes(buffer)
+    else:
+        raise ValueError(f"Unsupported NBT tag type: {tag_type}")
+
+
+def _get_nbt_type(value: Any) -> int:
+    """Get NBT tag type for a Python value"""
+    if isinstance(value, bool):
+        return 1  # Treat as byte
+    elif isinstance(value, int):
+        if -128 <= value <= 127:
+            return 1  # Byte
+        elif -32768 <= value <= 32767:
+            return 2  # Short
+        elif -2147483648 <= value <= 2147483647:
+            return 3  # Int
+        else:
+            return 4  # Long
+    elif isinstance(value, float):
+        return 5  # Float
+    elif isinstance(value, str):
+        return 8  # String
+    elif isinstance(value, list):
+        return 9  # List
+    elif isinstance(value, dict):
+        return 10  # Compound
+    else:
+        raise ValueError(f"Cannot determine NBT type for value: {value}")
+
+
 def read_nbt(buffer: ProtocolBuffer) -> Dict[str, Any]:
     """Read NBT buffer from protocol buffer - starts with a compound tag"""
     tag_type = read_ubyte(buffer)
@@ -555,8 +651,8 @@ def read_entity_metadata(buffer: ProtocolBuffer) -> Dict[int, Any]:
             else:
                 value = f"<unknown_type_{metadata_type}>"
         # todo: i don't like this
-        except Exception as e:
-            value = f"<error_reading_type_{metadata_type}>"
+        except (ValueError, EOFError) as e:
+            value = f"<error_reading_type_{metadata_type}: {e}>"
 
 
         metadata[index] = {'type': metadata_type, 'value': value}
@@ -564,7 +660,8 @@ def read_entity_metadata(buffer: ProtocolBuffer) -> Dict[int, Any]:
     return metadata
 
 
-def read_slot(buffer: ProtocolBuffer) -> Optional[ItemData]:
+
+def read_slot(buffer: ProtocolBuffer) -> Optional[entities.ItemData]:
     """Read slot data from buffer according to Minecraft protocol"""
     # Read Block ID (Short)
     item_id = read_short(buffer)
@@ -592,9 +689,100 @@ def read_slot(buffer: ProtocolBuffer) -> Optional[ItemData]:
             buffer.seek(pos)
             nbt_data = None
 
+    return {'item_id': item_id, 'item_count': item_count, 'item_damage': item_damage, 'nbt': nbt_data } # type: ignore
+
+
+def read_criterion_progress(buffer: ProtocolBuffer) -> advancement.CriterionProgress:
+    """Read criterion progress data from buffer"""
+    achieved = read_bool(buffer)
+    date_of_achieving = None
+
+    if achieved:
+        date_of_achieving = read_long(buffer)
+
     return {
-        'item_id': item_id,
-        'item_count': item_count,
-        'item_damage': item_damage,
-        'nbt': nbt_data
+        'achieved': achieved,
+        'date_of_achieving': date_of_achieving
+    }
+
+
+def read_advancement_progress(buffer: ProtocolBuffer) -> advancement.AdvancementProgress:
+    """Read advancement progress data from buffer"""
+    size = read_varint(buffer)
+    criteria = {}
+
+    for _ in range(size):
+        criterion_id = read_string(buffer)
+        criterion_progress = read_criterion_progress(buffer)
+        criteria[criterion_id] = criterion_progress
+
+    return {
+        'criteria': criteria
+    }
+
+
+def read_advancement_display(buffer: ProtocolBuffer) -> advancement.AdvancementDisplay:
+    """Read advancement display data from buffer"""
+    title = read_chat(buffer)
+    description = read_chat(buffer)
+    icon = read_slot(buffer)
+    frame_type = read_varint(buffer)
+    flags = read_int(buffer)
+
+    background_texture = None
+    if flags & 0x1:  # Has background texture
+        background_texture = read_string(buffer)
+
+    x_coord = read_float(buffer)
+    y_coord = read_float(buffer)
+
+    return {
+        'title': title,
+        'description': description,
+        'icon': icon,
+        'frame_type': frame_type,
+        'flags': flags,
+        'background_texture': background_texture,
+        'x_coord': x_coord,
+        'y_coord': y_coord
+    }
+
+
+def read_advancement(buffer: ProtocolBuffer) -> advancement.Advancement:
+    """Read a single advancement from buffer"""
+    has_parent = read_bool(buffer)
+    parent_id = None
+    if has_parent:
+        parent_id = read_string(buffer)
+
+    # Check if has display data
+    has_display = read_bool(buffer)
+    display_data = None
+    if has_display:
+        display_data = read_advancement_display(buffer)
+
+    # Read criteria
+    criteria_count = read_varint(buffer)
+    criteria = {}
+    for _ in range(criteria_count):
+        criterion_id = read_string(buffer)
+        # Criterion value is void (no content)
+        criteria[criterion_id] = None
+
+    # Read requirements
+    requirements_count = read_varint(buffer)
+    requirements = []
+    for _ in range(requirements_count):
+        requirement_array_length = read_varint(buffer)
+        requirement_array = []
+        for _ in range(requirement_array_length):
+            requirement = read_string(buffer)
+            requirement_array.append(requirement)
+        requirements.append(requirement_array)
+
+    return {
+        'parent_id': parent_id,
+        'display_data': display_data,
+        'criteria': criteria,
+        'requirements': requirements
     }

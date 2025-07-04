@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from actmc import protocol
 from . import math
+from .entities import misc
 import asyncio
 
 if TYPE_CHECKING:
@@ -127,8 +128,26 @@ class TcpClient:
         return protocol.ProtocolBuffer(protocol.write_varint(hand))
 
     @staticmethod
+    def held_item_change(slot: int) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_short(slot))
+        return buffer
+
+    @staticmethod
     def swing_arm(hand: int) -> protocol.ProtocolBuffer:
         return protocol.ProtocolBuffer(protocol.write_varint(hand))
+
+    @staticmethod
+    def player_block_placement(position: math.Vector3D[int], face: int, hand: int, cursor: math.Vector3D[float]
+                               ) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_position(*position))
+        buffer.write(protocol.write_varint(face))
+        buffer.write(protocol.write_varint(hand))
+        buffer.write(protocol.pack_float(cursor.x))
+        buffer.write(protocol.pack_float(cursor.y))
+        buffer.write(protocol.pack_float(cursor.z))
+        return buffer
 
     @staticmethod
     def player_digging(status: int, position: math.Vector3D[float], face: int) -> protocol.ProtocolBuffer:
@@ -178,4 +197,60 @@ class TcpClient:
         buffer.write(protocol.pack_float(hitbox.y))
         buffer.write(protocol.pack_float(hitbox.z))
         buffer.write(protocol.write_varint(hand))
+        return buffer
+
+    @staticmethod
+    def update_sign(position: math.Vector3D[float], line1: str, line2: str, line3: str,
+                    line4: str) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_position(*position))
+        buffer.write(protocol.pack_string(line1))
+        buffer.write(protocol.pack_string(line2))
+        buffer.write(protocol.pack_string(line3))
+        buffer.write(protocol.pack_string(line4))
+        return buffer
+
+    @staticmethod
+    def creative_inventory_action(slot: int, clicked_item: Optional[misc.ItemData]) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_short(slot))
+
+        if clicked_item is None:
+            buffer.write(protocol.pack_short(-1))
+        else:
+            buffer.write(protocol.pack_short(clicked_item['item_id']))
+            buffer.write(protocol.pack_byte(clicked_item['item_count']))
+            buffer.write(protocol.pack_short(clicked_item['item_damage']))
+            if clicked_item.get('nbt') is None:
+                buffer.write(protocol.pack_byte(0))
+            else:
+                nbt_data = protocol.pack_nbt(clicked_item['nbt'])
+                buffer.write(nbt_data)
+
+        return buffer
+
+    @staticmethod
+    def advancement_tab(action: int, tab_id: Optional[str] = None) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(action))
+        if tab_id is not None:
+            buffer.write(protocol.pack_string(tab_id))
+        return buffer
+
+    @staticmethod
+    def resource_pack_status(result: int) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(result))
+        return buffer
+
+    @staticmethod
+    def client_settings(locale: str, view_distance: int, chat_mode: int, chat_colors: bool,
+                        skin_parts: int, main_hand: int) -> protocol.ProtocolBuffer:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_string(locale))
+        buffer.write(protocol.pack_byte(view_distance))
+        buffer.write(protocol.write_varint(chat_mode))
+        buffer.write(protocol.pack_bool(chat_colors))
+        buffer.write(protocol.pack_ubyte(skin_parts))
+        buffer.write(protocol.write_varint(main_hand))
         return buffer

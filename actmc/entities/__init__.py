@@ -92,7 +92,7 @@ MOB_ENTITY_TYPES = {
 
 OBJECT_ENTITY_TYPES = {
     1: vehicles.Boat,
-    2: misc.ItemStack,
+    2: misc.DroppedItem,
     3: misc.AreaEffectCloud,
     10: {
         0: vehicles.MinecartRideable,

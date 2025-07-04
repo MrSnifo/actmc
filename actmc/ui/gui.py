@@ -24,15 +24,12 @@ class Slot:
         The slot's position index in the container
     item: Optional[Item]
         The item currently in this slot, None if empty
-    item_count: int
-        Number of items in this slot, 0 if empty
     """
-    __slots__ = ('index', 'item', 'item_count')
+    __slots__ = ('index', 'item')
 
-    def __init__(self, slot_id: int):
-        self.index: int = slot_id
+    def __init__(self, index: int):
+        self.index: int = index
         self.item: Optional[Item] = None
-        self.item_count: int = 0
 
     @property
     def is_empty(self) -> bool:
@@ -46,11 +43,11 @@ class Slot:
         bool
             True if slot is empty (no item or count <= 0), False otherwise
         """
-        return self.item is None or self.item_count <= 0
+        return self.item is None
 
     def __repr__(self) -> str:
-
         return f"<{self.__class__.__name__} index={self.index}, item={self.item}>"
+
 
 
 class Window:
@@ -115,11 +112,9 @@ class Window:
 
         slot = self.slots[slot_index]
         if item is not None:
-            slot.item = Item(item['item_id'], item['item_damage'], item['nbt'])
-            slot.item_count = item['item_count']
+            slot.item = Item(item['item_id'], item['item_count'], item['item_damage'], item['nbt'])
         else:
             slot.item = None
-            slot.item_count = 0
         return slot
 
     def get_slot(self, slot_id: int) -> Optional[Slot]:
@@ -158,4 +153,4 @@ class Window:
 
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, slot_count={self.slot_count}>"
+        return f"<{self.__class__.__name__} id={self.id}, slot_count={self.slot_count + 1}>"

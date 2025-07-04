@@ -560,8 +560,3 @@ class Creature(Insentient):
 
     __slots__ = ()
 
-    @property
-    def equipment(self) -> int:
-        """Insentient-specific bit mask."""
-        # todo: A gui ? or inventory of the ...
-        return int(self.get_metadata_value(-2, 0))

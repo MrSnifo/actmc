@@ -31,29 +31,33 @@ class Client:
     def user(self) -> Optional[User]:
         return self._connection.user
 
-    async def perform_respawn(self) -> None:
-        """
-        Informs the server that the client is ready to respawn
-        or complete login. This sends a Client Status packet with action ID 0.
-        """
-        await self._connection.send_client_status(0)
-
-    async def get_statistics(self) -> Dict[str, int]:
-        """
-        Requests updated statistics from the server.
-        This sends a Client Status packet with action ID 1.
-
-        <Warrning calling it many times may reutrn difriet sattustis and sotmiesm empty.
-
-        """
-
-        # todo: improve this, and cache it for few seconds to prevent extra requests
-        return await self._connection.get_statistics()
-
-    # -------------------+ Chunk +-------------------
     @property
     def chunks(self) -> Dict[Vector2D[int], Chunk]:
         return self._connection.chunks
+
+    @property
+    async def difficulty(self) ->  Optional[int]:
+        return self._connection.difficulty
+
+    @property
+    async def max_players(self) -> Optional[int]:
+        return self._connection.max_players
+
+    @property
+    async def world_type(self) -> Optional[str]:
+        return self._connection.world_type
+
+    @property
+    async def world_age(self) -> Optional[int]:
+        return self._connection.world_age
+
+    @property
+    async def time_of_day(self) -> Optional[int]:
+        return self._connection.time_of_day
+
+    async def perform_respawn(self) -> None:
+        """Respawn"""
+        await self._connection.send_client_status(0)
 
     def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
         return self._connection.get_block_state(pos)
