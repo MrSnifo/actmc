@@ -85,7 +85,6 @@ class TcpClient:
             self._writer.close()
             await self._writer.wait_closed()
             self._closed = True
-            _logger.debug(f"Connection to {self.host}:{self.port} closed")
 
     def _compress_payload(self, payload: bytes) -> bytes:
         """Compress payload data if compression is enabled."""

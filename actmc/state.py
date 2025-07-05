@@ -27,16 +27,15 @@ from __future__ import annotations
 from . import entities, math, protocol
 from typing import TYPE_CHECKING
 from .ui.chat import Message
-from .ui import tab, gui, bossbar, border, scoreboard, actionbar, advancement
+from .ui import tablist, gui, bossbar, border, scoreboard, actionbar, advancement
 from .user import User
 from .chunk import *
 from .utils import position_to_chunk_relative
-import asyncio
 
 from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, List, Optional
+    from typing import Any, Callable, Dict, Optional
     from .tcp import TcpClient
 
 import logging
@@ -53,10 +52,6 @@ class ConnectionState:
         self.tcp: Optional[TcpClient] = None
         self._dispatch = dispatcher
         self._load_chunks = True
-
-        # Event system
-        self._waiters: Dict[str, List[asyncio.Future]] = {}
-
         # Player state
         self.username: Optional[str] = username
         self.uid: Optional[str] = None
@@ -74,15 +69,42 @@ class ConnectionState:
         self.world_border: Optional[border.WorldBorder] = None
 
         self.entities: Dict[int, entities.entity.Entity] = {}
-        self.tablist: Dict[str, tab.TabPlayer] = {}
+        self.tablist: Dict[str, tablist.TabPlayer] = {}
         self.windows: Dict[int, gui.Window] = {}
         self.boss_bars: Dict[str, bossbar.BossBar] = {}
-        self.scoreboard_objectives: Dict[str, scoreboard.ScoreboardObjective] = {}
+        self.scoreboard_objectives: Dict[str, scoreboard.Scoreboard] = {}
         self.action_bar: actionbar.Title =  actionbar.Title()
 
         # Initialize packet parser cache
         if not self._packet_parsers:
             self._build_parser_cache()
+
+    def clear(self) -> None:
+        """Clear all connection state data."""
+        self.tcp = None
+
+        # Clear player state (keep username as it's set during init)
+        self.uid = None
+        self.user = None
+
+        # Clear server information
+        self.difficulty = None
+        self.max_players = None
+        self.world_type = None
+        self.world_age = None
+        self.time_of_day = None
+
+        # Clear world state
+        self.chunks.clear()
+        self.world_border = None
+
+        # Clear game objects
+        self.entities.clear()
+        self.tablist.clear()
+        self.windows.clear()
+        self.boss_bars.clear()
+        self.scoreboard_objectives.clear()
+        self.action_bar = actionbar.Title()
 
     @classmethod
     def _build_parser_cache(cls) -> None:
@@ -430,11 +452,11 @@ class ConnectionState:
 
             boss_bar = bossbar.BossBar(bar_uuid, title, health, color, division, flags)
             self.boss_bars[uuid_str] = boss_bar
-            self._dispatch('bossbar_add', boss_bar)
+            self._dispatch('boss_bar_add', boss_bar)
 
         elif action == 1:  # Remove
             removed_bar = self.boss_bars.pop(uuid_str, None)
-            self._dispatch('bossbar_remove', removed_bar)
+            self._dispatch('boss_bar_remove', removed_bar)
 
         else:
             bar = self.boss_bars.get(uuid_str)
@@ -444,17 +466,17 @@ class ConnectionState:
 
             if action == 2:
                 bar.health = protocol.read_float(buffer)
-                self._dispatch('bossbar_update_health', bar)
+                self._dispatch('boss_bar_update_health', bar)
             elif action == 3:
                 bar.title = protocol.read_chat(buffer)
-                self._dispatch('bossbar_update_title', bar)
+                self._dispatch('boss_bar_update_title', bar)
             elif action == 4:
                 bar.color = protocol.read_varint(buffer)
                 bar.division = protocol.read_varint(buffer)
-                self._dispatch('bossbar_update_style', bar)
+                self._dispatch('boss_bar_update_style', bar)
             elif action == 5:
                 bar.flags = protocol.read_ubyte(buffer)
-                self._dispatch('bossbar_update_flags', bar)
+                self._dispatch('boss_bar_update_flags', bar)
 
     async def parse_0x09(self, buffer: protocol.ProtocolBuffer) -> None:
         # Parse packet data
@@ -736,14 +758,14 @@ class ConnectionState:
                     value = protocol.read_string(buffer, 32767)
                     is_signed = protocol.read_bool(buffer)
                     signature = protocol.read_string(buffer, 32767) if is_signed else None
-                    properties.append(tab.Property(property_name, value, signature))
+                    properties.append(tablist.Property(property_name, value, signature))
 
                 gamemode = protocol.read_varint(buffer)
                 ping = protocol.read_varint(buffer)
                 has_display_name = protocol.read_bool(buffer)
                 display_name = Message(protocol.read_chat(buffer)) if has_display_name else None
 
-                player = tab.TabPlayer(
+                player = tablist.TabPlayer(
                     name=name,
                     properties=properties,
                     gamemode=gamemode,
@@ -1351,7 +1373,7 @@ class ConnectionState:
             objective_value = protocol.read_string(data, 32)
             score_type = protocol.read_string(data, 16)
 
-            objective = scoreboard.ScoreboardObjective(objective_name, objective_value, score_type)
+            objective = scoreboard.Scoreboard(objective_name, objective_value, score_type)
             self.scoreboard_objectives[objective_name] = objective
 
         elif mode == 1:

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from .gateway import MinecraftSocket
-from typing import Optional, Literal, Any, Callable, TYPE_CHECKING, Dict
+from typing import Optional, Literal, Any, Callable, TYPE_CHECKING, Dict, Type
+from types import TracebackType
 import asyncio
 from .utils import setup_logging
 from .tcp import TcpClient
@@ -11,13 +12,29 @@ if TYPE_CHECKING:
     from .chunk import Chunk, Block
     from .math import Vector2D, Vector3D
     from .user import User
+    from .ui.border import WorldBorder
+    from .ui.tablist import TabPlayer
+    from .ui.gui import Window
+    from .ui.bossbar import BossBar
+    from .ui.scoreboard import Scoreboard
+    from .ui.actionbar import Title
 from .state import ConnectionState
 
 import logging
 _logger = logging.getLogger(__name__)
 
+
 class Client:
-    def __init__(self, username: str):
+    """
+    A Minecraft client for connecting to and interacting with Minecraft servers.
+
+    Parameters
+    ----------
+    username: str
+        The username to use for the connection.
+    """
+
+    def __init__(self, username: str) -> None:
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
         self.tcp: Optional[TcpClient] = None
@@ -25,50 +42,205 @@ class Client:
         self._closing_task: Optional[asyncio.Task] = None
         self._closed = False
 
-    # -------------------+ Player +-------------------
-
     @property
     def user(self) -> Optional[User]:
+        """
+        Get the current user.
+
+        Returns
+        -------
+        Optional[User]
+            The current user object, or None if not connected.
+        """
         return self._connection.user
 
     @property
     def chunks(self) -> Dict[Vector2D[int], Chunk]:
+        """
+        Get the loaded chunks.
+
+        Returns
+        -------
+        Dict[Vector2D[int], Chunk]
+            Dictionary mapping chunk coordinates to chunk objects.
+        """
         return self._connection.chunks
 
     @property
-    async def difficulty(self) ->  Optional[int]:
+    async def difficulty(self) -> Optional[int]:
+        """
+        Get the current world difficulty.
+
+        Returns
+        -------
+        Optional[int]
+            The difficulty level, or None if not available.
+        """
         return self._connection.difficulty
 
     @property
     async def max_players(self) -> Optional[int]:
+        """
+        Get the maximum number of players allowed on the server.
+
+        Returns
+        -------
+        Optional[int]
+            The maximum player count, or None if not available.
+        """
         return self._connection.max_players
 
     @property
     async def world_type(self) -> Optional[str]:
+        """
+        Get the world type.
+
+        Returns
+        -------
+        Optional[str]
+            The world type string, or None if not available.
+        """
         return self._connection.world_type
 
     @property
     async def world_age(self) -> Optional[int]:
+        """
+        Get the age of the world in ticks.
+
+        Returns
+        -------
+        Optional[int]
+            The world age in ticks, or None if not available.
+        """
         return self._connection.world_age
 
     @property
     async def time_of_day(self) -> Optional[int]:
+        """
+        Get the current time of day.
+
+        Returns
+        -------
+        Optional[int]
+            The time of day in ticks, or None if not available.
+        """
         return self._connection.time_of_day
 
+    @property
+    def world_border(self) -> Optional[WorldBorder]:
+        """
+        Get the world border information.
+
+        Returns
+        -------
+        Optional[WorldBorder]
+            The world border object, or None if not available.
+        """
+        return self._connection.world_border
+
+    @property
+    def tablist(self) -> Dict[str, TabPlayer]:
+        """
+        Get the player tablist.
+
+        Returns
+        -------
+        Dict[str, TabPlayer]
+            Dictionary mapping player names to TabPlayer objects.
+        """
+        return self._connection.tablist
+
+    @property
+    def windows(self) -> Dict[int, Window]:
+        """
+        Get the open windows/inventories.
+
+        Returns
+        -------
+        Dict[int, Window]
+            Dictionary mapping window IDs to Window objects.
+        """
+        return self._connection.windows
+
+    @property
+    def boss_bars(self) -> Dict[str, BossBar]:
+        """
+        Get the active boss bars.
+
+        Returns
+        -------
+        Dict[str, BossBar]
+            Dictionary mapping boss bar UUIDs to BossBar objects.
+        """
+        return self._connection.boss_bars
+
+    @property
+    def scoreboard(self) -> Dict[str, Scoreboard]:
+        """
+        Get the scoreboard objectives.
+
+        Returns
+        -------
+        Dict[str, Scoreboard]
+            Dictionary mapping objective names to ScoreboardObjective objects.
+        """
+        return self._connection.scoreboard_objectives
+
+    @property
+    def action_bar(self) -> Title:
+        """
+        Get the action bar title.
+
+        Returns
+        -------
+        Title
+            The current action bar title object.
+        """
+        return self._connection.action_bar
+
     def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
+        """
+        Get the block at the specified position.
+
+        Parameters
+        ----------
+        pos: Vector3D[int]
+            The position coordinates of the block.
+
+        Returns
+        -------
+        Optional[Block]
+            The block at the specified position, or None if not available.
+        """
         return self._connection.get_block_state(pos)
 
-    # -----------------------------------------------
-    def _get_socket(self) -> MinecraftSocket:
-        return self.socket
+    def is_closed(self) -> bool:
+        """
+        Check if the client connection is closed.
 
-    def _get_state(self, username: str) -> ConnectionState:
-        return ConnectionState(username=username, dispatcher=self.dispatch)
-
-    def is_closed(self):
+        Returns
+        -------
+        bool
+            True if the connection is closed, False otherwise.
+        """
         return self._closed
 
     async def connect(self, host: str, port: Optional[int]) -> None:
+        """
+        Connect to a Minecraft server.
+
+        Parameters
+        ----------
+        host: str
+            The server hostname or IP address.
+        port: Optional[int]
+            The server port number.
+
+        Raises
+        ------
+        asyncio.exceptions.IncompleteReadError
+            If the connection is interrupted unexpectedly.
+        """
         try:
             while not self.is_closed():
                 socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
@@ -80,96 +252,153 @@ class Client:
         except asyncio.exceptions.IncompleteReadError:
             print("ERROR - Something went wrong")
 
-    @staticmethod
-    async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
+    async def start(self, host: str, port: Optional[int]) -> None:
         """
-        Handle errors occurring during event dispatch.
-
-        This static method logs an exception that occurred during the processing of an event.
+        Start the client and connect to the server.
 
         Parameters
         ----------
-        packet_id: str
-            The packet id of the event that caused the error.
-        error: Exception
-            The exception that was raised.
-        *args: Any
-            Positional arguments passed to the event.
-        **kwargs: Any
-            Keyword arguments passed to the event.
+        host: str
+            The server hostname or IP address.
+        port: Optional[int]
+            The server port number.
         """
-        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id,
-                          args, kwargs)
-
-    async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
-        # Run an event coroutine and handle exceptions.
-        try:
-            await coro(*args, **kwargs)
-        except asyncio.CancelledError:
-            pass
-        except Exception as error:
-            await self.on_error(event_name, error, *args, **kwargs)
-
-    def dispatch(self, event: str, /, *args: Any, **kwargs: Any) -> None:
-        # Dispatch a specified event with a coroutine callback.
-        method = 'on_' + event
-        try:
-            coro = getattr(self, method)
-            if coro is not None and asyncio.iscoroutinefunction(coro):
-                _logger.trace('Dispatching event %s', event) # type: ignore
-                wrapped = self._run_event(coro, method, *args, **kwargs)
-                # Schedule the task
-                self.loop.create_task(wrapped, name=f'twitch:{method}')
-        except AttributeError:
-            pass
-        except Exception as error:
-            _logger.error('Event: %s Error: %s', event, error)
-
-    def event(self, coro: Callable[..., Any], /) -> None:
-        """
-        Register a coroutine function as an event handler.
-
-        This method assigns the given coroutine function to be used as an event handler with the same
-        name as the coroutine function.
-
-        Parameters
-        ----------
-        coro: Callable[..., Any]
-            The coroutine function to register as an event handler.
-
-        Example
-        -------
-        ```py
-        @client.event
-        async def on_ready():
-            print('Ready!')
-        ```
-        """
-        if not asyncio.iscoroutinefunction(coro):
-            raise TypeError('The registered event must be a coroutine function')
-        setattr(self, coro.__name__, coro)
-
-
-    async def _async_loop(self) -> None:
-        # Starts the asynchronous loop for managing client operations.
-        loop = asyncio.get_running_loop()
-        self.loop = loop
-
-    async def start(self, host: str, port: Optional[int]):
         if self.loop is None:
             await self._async_loop()
         await self.connect(host, port)
 
+    async def close(self) -> None:
+        """
+        Close the connection to the Minecraft server.
+
+        If a closing task is already running, it waits for it to complete.
+
+        If the socket is open, it is closed with proper cleanup. After closing
+        the socket, it clears the connection state and closes the TCP client.
+        """
+        if self._closing_task:
+            return await self._closing_task
+
+        async def _close():
+            if self.socket is not None:
+                await self.socket.close()
+
+            self._connection.clear()
+            self._closed = True
+            self.loop = None
+
+        self._closing_task = asyncio.create_task(_close())
+        return await self._closing_task
+
+    async def __aenter__(self) -> Client:
+        """
+        Asynchronous context manager entry method.
+
+        Returns
+        -------
+        Client
+            The current instance of the client, allowing it to be used within an async context manager.
+        """
+        return self
+
+    async def __aexit__(self,
+                        exc_type: Optional[Type[BaseException]],
+                        exc_value: Optional[BaseException],
+                        traceback: Optional[TracebackType]) -> None:
+        """
+        Asynchronous context manager exit method.
+
+        Closes the client connection when exiting the async context manager.
+
+        Parameters
+        ----------
+        exc_type: Optional[Type[BaseException]]
+            The type of the exception raised, if any.
+        exc_value: Optional[BaseException]
+            The exception instance, if any.
+        traceback: Optional[TracebackType]
+            The traceback object, if any.
+        """
+        if self._closing_task:
+            await self._closing_task
+        else:
+            await self.close()
+
+    def run(self,
+            host: str,
+            port: Optional[int] = 25565,
+            *,
+            log_handler: Optional[logging.Handler] = None,
+            log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]] = None,
+            root_logger: bool = False) -> None:
+        """
+        Start the client and run it until interrupted.
+
+        !!! danger
+            This function must be the last function to call as it blocks
+            the execution of anything after it.
+
+        This method sets up logging, initializes the client, and starts the main
+        asynchronous process. The client will run and handle events until the
+        process is interrupted (e.g., by a KeyboardInterrupt). The logging setup
+        is customizable via parameters.
+
+        Parameters
+        ----------
+        host: str
+            The server hostname or IP address.
+        port: Optional[int]
+            The server port number.
+        log_handler: Optional[logging.Handler], default=None
+            A logging handler to be used for logging output. If None, a default handler will be set up.
+        log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]], default=None
+            The logging level to be used (NOTSET=0, DEBUG=10, INFO=20, WARNING=30, ERROR=40, CRITICAL=50).
+            If None, a default level will be used.
+        root_logger: bool, default=False
+            If True, the logging configuration will apply to the root logger. Otherwise, it applies to a new logger.
+
+        Notes
+        -----
+        By using this client, you agree to Minecraft's EULA:
+        https://account.mojang.com/documents/minecraft_eula
+        """
+        if log_handler is None:
+            setup_logging(handler=log_handler, level=log_level, root=root_logger)
+
+        async def runner() -> None:
+            """
+            Inner function to run the main process asynchronously.
+            """
+            async with self:
+                await self.start(host, port)
+
+        try:
+            asyncio.run(runner())
+        except KeyboardInterrupt:
+            return
 
     async def respawn_user(self) -> None:
-        """Perform a respawn"""
+        """
+        Perform a respawn operation for the current user.
+
+        Notes
+        -----
+        This sends a respawn packet to the server to respawn the player.
+        """
         await self._connection.respawn()
 
-    async def send_client_settings(self, locale: str = 'en_US', view_distance: int = 10,
-                                   chat_mode: int = 0, chat_colors: bool = True,
-                                   cape: bool = True, jacket: bool = True, left_sleeve: bool = True,
-                                   right_sleeve: bool = True, left_pants: bool = True,
-                                   right_pants: bool = True, hat: bool = True,
+    async def send_client_settings(self,
+                                   locale: str = 'en_US',
+                                   view_distance: int = 10,
+                                   chat_mode: int = 0,
+                                   chat_colors: bool = True,
+                                   cape: bool = True,
+                                   jacket: bool = True,
+                                   left_sleeve: bool = True,
+                                   right_sleeve: bool = True,
+                                   left_pants: bool = True,
+                                   right_pants: bool = True,
+                                   hat: bool = True,
                                    main_hand: int = 1) -> None:
         """
         Send client settings to the server.
@@ -198,7 +427,7 @@ class Client:
             Whether to display right pants overlay.
         hat: bool
             Whether to display hat overlay.
-        main_hand: int
+        main_hand: int, default=1
             Main hand (0=left, 1=right).
         """
         skin_parts = 0
@@ -228,10 +457,16 @@ class Client:
         tab_id: str
             The advancement tab identifier.
         """
-        await self._connection.open_advancement_tab( tab_id)
+        await self._connection.open_advancement_tab(tab_id)
 
     async def close_advancement_tab(self) -> None:
-        """Close the advancement tab."""
+        """
+        Close the advancement tab.
+
+        Notes
+        -----
+        This sends a packet to close the currently open advancement tab.
+        """
         await self.tcp.advancement_tab(1)
 
     async def set_resource_pack_status(self, result: int) -> None:
@@ -245,21 +480,130 @@ class Client:
         """
         await self._connection.set_resource_pack_status(result)
 
-    def run(self,
-            host: str, port: Optional[int] = 25565,
-            log_handler: Optional[logging.Handler] = None,
-            log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]] = None,
-            root_logger: bool = False) -> None:
-        if log_handler is None:
-            setup_logging(handler=log_handler, level=log_level, root=root_logger)
+    def event(self, coro: Callable[..., Any], /) -> None:
+        """
+        Register a coroutine function as an event handler.
 
-        # https://account.mojang.com/documents/minecraft_eula README
+        This method assigns the given coroutine function to be used as an event handler with the same
+        name as the coroutine function.
 
-        async def runner() -> None:
-            await self.start(host, port)
+        Parameters
+        ----------
+        coro: Callable[..., Any]
+            The coroutine function to register as an event handler.
 
+        Raises
+        ------
+        TypeError
+            If the provided function is not a coroutine function.
+        """
+        if not asyncio.iscoroutinefunction(coro):
+            raise TypeError('The registered event must be a coroutine function')
+        setattr(self, coro.__name__, coro)
+
+    def dispatch(self, event: str, /, *args: Any, **kwargs: Any) -> None:
+        """
+        Dispatch a specified event with a coroutine callback.
+
+        Parameters
+        ----------
+        event: str
+            The name of the event to dispatch.
+        *args: Any
+            Positional arguments to pass to the event handler.
+        **kwargs: Any
+            Keyword arguments to pass to the event handler.
+        """
+        method = 'on_' + event
         try:
-            asyncio.run(runner())
-        except KeyboardInterrupt:
-            return
+            coro = getattr(self, method)
+            if coro is not None and asyncio.iscoroutinefunction(coro):
+                _logger.trace('Dispatching event %s', event)  # type: ignore
+                wrapped = self._run_event(coro, method, *args, **kwargs)
+                # Schedule the task
+                self.loop.create_task(wrapped, name=f'twitch:{method}')
+        except AttributeError:
+            pass
+        except Exception as error:
+            _logger.error('Event: %s Error: %s', event, error)
 
+    def _get_socket(self) -> MinecraftSocket:
+        """
+        Get the current socket connection.
+
+        Returns
+        -------
+        MinecraftSocket
+            The current socket instance.
+        """
+        return self.socket
+
+    def _get_state(self, username: str) -> ConnectionState:
+        """
+        Create and return a connection state object.
+
+        Parameters
+        ----------
+        username: str
+            The username for the connection.
+
+        Returns
+        -------
+        ConnectionState
+            A new connection state instance.
+        """
+        return ConnectionState(username=username, dispatcher=self.dispatch)
+
+    async def _async_loop(self) -> None:
+        """
+        Initialize the asynchronous event loop for managing client operations.
+
+        Notes
+        -----
+        This method sets up the event loop and stores a reference to it.
+        """
+        loop = asyncio.get_running_loop()
+        self.loop = loop
+
+    async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
+        """
+        Run an event coroutine and handle exceptions.
+
+        Parameters
+        ----------
+        coro: Callable[..., Any]
+            The coroutine function to execute.
+        event_name: str
+            The name of the event being executed.
+        *args: Any
+            Positional arguments to pass to the coroutine.
+        **kwargs: Any
+            Keyword arguments to pass to the coroutine.
+        """
+        try:
+            await coro(*args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            await self.on_error(event_name, error, *args, **kwargs)
+
+    @staticmethod
+    async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
+        """
+        Handle errors occurring during event dispatch.
+
+        This static method logs an exception that occurred during the processing of an event.
+
+        Parameters
+        ----------
+        packet_id: str
+            The packet id of the event that caused the error.
+        error: Exception
+            The exception that was raised.
+        *args: Any
+            Positional arguments passed to the event.
+        **kwargs: Any
+            Keyword arguments passed to the event.
+        """
+        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id,
+                          args, kwargs)

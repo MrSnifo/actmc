@@ -1,6 +1,6 @@
 from typing import Dict
 
-class ScoreboardObjective:
+class Scoreboard:
     """
     Minecraft Scoreboard Objective representation and packet parser.
 
@@ -267,7 +267,7 @@ class ScoreboardObjective:
 
     def __eq__(self, other) -> bool:
         """Check equality based on objective name."""
-        if not isinstance(other, ScoreboardObjective):
+        if not isinstance(other, Scoreboard):
             return False
         return self.name == other.name
 
