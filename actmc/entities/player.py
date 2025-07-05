@@ -55,15 +55,15 @@ class Player(Living):
                  position: Vector3D[float],
                  rotation: Rotation,
                  metadata: Dict[int, Any],
-                 tablist: Dict[str, Optional[tab.TabPlayer]]) -> None:
+                 tablist: Dict[str, Optional[tab.PlayerInfo]]) -> None:
         super().__init__(entity_id, uuid, position, rotation, metadata)
-        self._tablist: Dict[str, Optional[tab.TabPlayer]] = tablist
+        self._tablist: Dict[str, Optional[tab.PlayerInfo]] = tablist
 
     ENTITY_TYPE: ClassVar[str] = 'minecraft:player'
     BOUNDING: ClassVar[Tuple[float, float]] = (0.6, 1.8)
 
     @property
-    def info(self) -> Optional[tab.TabPlayer]:
+    def info(self) -> Optional[tab.PlayerInfo]:
         """
         Get additional player information from the server's tab list.
 

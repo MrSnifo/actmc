@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from typing import List, Optional
     from .chat import Message
 
+__all__ = ('Property', 'PlayerInfo')
+
 class Property:
     """
     Represents a player property such as skin or cape data.
@@ -63,10 +65,9 @@ class Property:
         return self.signature is not None
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} name={self.name}, is_signed={self.is_signed}>"
+        return f"<Property name={self.name}, is_signed={self.is_signed}>"
 
-
-class TabPlayer:
+class PlayerInfo:
     """
     Represents a player from the server's player list (tab list).
 
@@ -137,4 +138,4 @@ class TabPlayer:
         return self.get_property("textures") is not None
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} name={self.name}, ping={self.ping}, gamemode={self.gamemode}>"
+        return f"<PlayerInfo name={self.name}, ping={self.ping}, gamemode={self.gamemode}>"

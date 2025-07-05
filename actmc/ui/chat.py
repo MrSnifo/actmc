@@ -31,6 +31,8 @@ import re
 if TYPE_CHECKING:
     from typing import Any, Optional, Dict, List, Union
 
+__all__ = ('MessageEvent', 'Message')
+
 class MessageEvent:
     """Represents a click or hover event in a chat message."""
     __slots__ = ('_action', '_value')
@@ -90,7 +92,6 @@ class MessageEvent:
             A string that could be used to recreate the MessageEvent object.
         """
         return f"<MessageEvent action={self._action!r}, value={self._value!r}>"
-
 
 class Message:
     """A class to handle Minecraft chat messages with full formatting and event support."""

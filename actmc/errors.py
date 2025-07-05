@@ -24,19 +24,12 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-__all__ = ('ActmcException',
-           'ClientException',
-           'ProtocolError',
-           'DataTooShortError',
-           'InvalidDataError'
-           )
+__all__ = ('ActmcException', 'ClientException', 'ProtocolError', 'DataTooShortError', 'InvalidDataError')
 
 
 class ActmcException(Exception):
     """
-    Base exception for Actmc.py.
+    Base exception for ActMc.
     """
     pass
 

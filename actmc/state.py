@@ -69,7 +69,7 @@ class ConnectionState:
         self.world_border: Optional[border.WorldBorder] = None
 
         self.entities: Dict[int, entities.entity.Entity] = {}
-        self.tablist: Dict[str, tablist.TabPlayer] = {}
+        self.tablist: Dict[str, tablist.PlayerInfo] = {}
         self.windows: Dict[int, gui.Window] = {}
         self.boss_bars: Dict[str, bossbar.BossBar] = {}
         self.scoreboard_objectives: Dict[str, scoreboard.Scoreboard] = {}
@@ -119,9 +119,9 @@ class ConnectionState:
                     continue
 
     # ------------------------------
-    async def respawn(self) -> None:
-        """Perform a respawn"""
-        await self.tcp.client_status(0)
+    async def send_client_status(self, action_id: int) -> None:
+        """0 for respawn and 1 for statistics"""
+        await self.tcp.client_status(action_id)
 
     async def send_client_settings(self, locale: str, view_distance: int, chat_mode: int, chat_colors: bool,
                                    cape: bool, jacket: bool, left_sleeve: bool, right_sleeve: bool, left_pants: bool,
@@ -765,7 +765,7 @@ class ConnectionState:
                 has_display_name = protocol.read_bool(buffer)
                 display_name = Message(protocol.read_chat(buffer)) if has_display_name else None
 
-                player = tablist.TabPlayer(
+                player = tablist.PlayerInfo(
                     name=name,
                     properties=properties,
                     gamemode=gamemode,
@@ -1494,8 +1494,8 @@ class ConnectionState:
                     advancement_dict['display_data']['frame_type'],
                     advancement_dict['display_data']['flags'],
                     advancement_dict['display_data']['background_texture'],
-                    advancement_dict['display_data']['x_coord'],
-                    advancement_dict['display_data']['y_coord']
+                    math.Vector2D(advancement_dict['display_data']['x_coord'],
+                                  advancement_dict['display_data']['y_coord'])
                 )
 
             ad = advancement.Advancement(

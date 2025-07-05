@@ -1,5 +1,30 @@
+"""
+The MIT License (MIT)
+
+Copyright (c) 2025-present Snifo
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+"""
+
 from __future__ import annotations
 
+from .errors import ClientException
 from .gateway import MinecraftSocket
 from .state import ConnectionState
 from typing import TYPE_CHECKING
@@ -11,7 +36,7 @@ if TYPE_CHECKING:
     from .ui.scoreboard import Scoreboard
     from .math import Vector2D, Vector3D
     from .ui.border import WorldBorder
-    from .ui.tablist import TabPlayer
+    from .ui.tablist import PlayerInfo
     from .ui.actionbar import Title
     from .chunk import Chunk, Block
     from types import TracebackType
@@ -22,6 +47,8 @@ if TYPE_CHECKING:
 
 import logging
 _logger = logging.getLogger(__name__)
+
+__all__ = ('Client',)
 
 
 class Client:
@@ -139,14 +166,14 @@ class Client:
         return self._connection.world_border
 
     @property
-    def tablist(self) -> Dict[str, TabPlayer]:
+    def tablist(self) -> Dict[str, PlayerInfo]:
         """
-        Get the player tablist.
+        Get the player tab list.
 
         Returns
         -------
-        Dict[str, TabPlayer]
-            Dictionary mapping player names to TabPlayer objects.
+        Dict[str, PlayerInfo]
+            A dictionary mapping player UIDs to TabPlayer objects.
         """
         return self._connection.tablist
 
@@ -238,19 +265,25 @@ class Client:
 
         Raises
         ------
+        ClientException
+            If the client fails to connect.
         asyncio.exceptions.IncompleteReadError
             If the connection is interrupted unexpectedly.
         """
-        try:
-            while not self.is_closed():
+        while not self.is_closed():
+            try:
                 socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
                 self.socket = await asyncio.wait_for(socket, timeout=60.0)
                 self.dispatch('connect')
                 while True:
                     await self.socket.poll()
 
-        except asyncio.exceptions.IncompleteReadError:
-            print("ERROR - Something went wrong")
+            except asyncio.exceptions.IncompleteReadError:
+                raise ClientException("Connection interrupted unexpectedly")
+            except (OSError, asyncio.TimeoutError) as exc:
+                if self.is_closed():
+                    return
+                raise ClientException(f"Connection failed to {host}:{port}: {exc}")
 
     async def start(self, host: str, port: Optional[int]) -> None:
         """
@@ -356,15 +389,26 @@ class Client:
         except KeyboardInterrupt:
             return
 
-    async def respawn_user(self) -> None:
+    async def perform_respawn(self) -> None:
         """
-        Perform a respawn operation for the current user.
+        Request the server to respawn the player.
 
         Notes
         -----
-        This sends a respawn packet to the server to respawn the player.
+        Typically used after death to rejoin the world.
         """
-        await self._connection.respawn()
+        await self._connection.send_client_status(0)
+
+    async def request_stats(self) -> None:
+        """
+        Request the player's statistics from the server.
+
+        Notes
+        -----
+        The server responds by sending the statistics,
+        which are usually processed in the ``on_statistics`` handler.
+        """
+        await self._connection.send_client_status(1)
 
     async def send_client_settings(self,
                                    locale: str = 'en_US',

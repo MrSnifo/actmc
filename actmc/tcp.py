@@ -23,19 +23,20 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from __future__ import annotations
-import zlib
-from typing import TYPE_CHECKING, Self
+
+from .errors import ClientException, InvalidDataError
+from typing import TYPE_CHECKING
 from actmc import protocol
-from . import math
-from .entities import misc
 import asyncio
+import zlib
 
 if TYPE_CHECKING:
     from typing import ClassVar, Optional, Coroutine, Any
     from asyncio import StreamReader, StreamWriter
+    from .entities import misc
+    from . import math
 
 import logging
-
 _logger = logging.getLogger(__name__)
 
 
@@ -54,7 +55,7 @@ class TcpClient:
         self.compression_threshold = self.COMPRESSION_THRESHOLD_DEFAULT
 
     @classmethod
-    async def connect(cls, host: str, port: int) -> Self:
+    async def connect(cls, host: str, port: int) -> TcpClient:
         """Create and initialize a socket connection."""
         reader, writer = await asyncio.open_connection(host=host, port=port, limit=cls.DEFAULT_LIMIT)
         _logger.debug(f"Connection established to {host}:{port}")
@@ -64,14 +65,14 @@ class TcpClient:
     def reader(self) -> StreamReader:
         """Get the stream reader."""
         if self._closed:
-            raise RuntimeError("Connection is closed")
+            raise ClientException("Connection is closed")
         return self._reader
 
     @property
     def writer(self) -> StreamWriter:
         """Get the stream writer."""
         if self._closed:
-            raise RuntimeError("Connection is closed")
+            raise ClientException("Connection is closed")
         return self._writer
 
     @property
@@ -93,17 +94,13 @@ class TcpClient:
 
         if self.compression_threshold >= 0:
             if payload_length >= self.compression_threshold:
-                # Compress data and include original length
                 compressed_data = zlib.compress(payload)
                 body_buffer.write(protocol.write_varint(payload_length))
                 body_buffer.write(compressed_data)
-                _logger.debug(f"Compressed payload: {payload_length} -> {len(compressed_data)} bytes")
             else:
-                # Include uncompressed data with 0 length marker
                 body_buffer.write(protocol.write_varint(0))
                 body_buffer.write(payload)
         else:
-            # No compression enabled
             body_buffer.write(payload)
 
         return body_buffer.getvalue()
@@ -111,7 +108,7 @@ class TcpClient:
     async def write_packet(self, packet_id: int, data: protocol.ProtocolBuffer) -> None:
         """Write a complete Minecraft protocol packet."""
         if self.is_closed:
-            raise RuntimeError("Cannot write to closed connection")
+            raise ClientException("Cannot write to closed connection")
 
         try:
             packet_id_bytes = protocol.write_varint(packet_id)
@@ -119,15 +116,17 @@ class TcpClient:
 
             body = self._compress_payload(payload)
 
-            # Write packet length followed by packet data
             self.writer.write(protocol.write_varint(len(body)))
             self.writer.write(body)
             await self.writer.drain()
-
             _logger.debug("Sent packet 0x%02X", packet_id)
-        except Exception as e:
-            _logger.error(f"Failed to write packet 0x{packet_id:02X}: {e}")
-            raise
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            raise ClientException(f"Connection lost while writing packet 0x{packet_id:02X}")
+        except OSError as e:
+            raise ClientException(f"Network error writing packet 0x{packet_id:02X}: {e}")
+        except (ValueError, TypeError) as e:
+            raise InvalidDataError(f"Invalid packet data for 0x{packet_id:02X}: {e}")
+
 
     def handshake_packet(self, next_state: int = 2) -> Coroutine[Any, Any, None]:
         """Construct the Minecraft handshake packet."""
