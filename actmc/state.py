@@ -37,7 +37,6 @@ from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Optional
-    from .gateway import MinecraftSocket
     from .tcp import TcpClient
 
 import logging
@@ -46,16 +45,6 @@ _logger = logging.getLogger(__name__)
 __all__ = ('ConnectionState',)
 
 class ConnectionState:
-    """
-    Manages connection state and packet handling for a Minecraft client.
-
-    This class handles all incoming packet parsing, maintains world state,
-    manages player information, and provides an event-driven interface
-    for interacting with the Minecraft server.
-    """
-
-    if TYPE_CHECKING:
-        _get_socket: Callable[..., MinecraftSocket]
 
     # Class-level packet parser cache for performance
     _packet_parsers: Dict[int, str] = {}
@@ -107,13 +96,50 @@ class ConnectionState:
                     _logger.warning(f"Invalid packet parser method name: %s", attr_name)
                     continue
 
+    # ------------------------------
+    async def respawn(self) -> None:
+        """Perform a respawn"""
+        await self.tcp.client_status(0)
+
+    async def send_client_settings(self, locale: str, view_distance: int, chat_mode: int, chat_colors: bool,
+                                   cape: bool, jacket: bool, left_sleeve: bool, right_sleeve: bool, left_pants: bool,
+                                   right_pants: bool, hat: bool, main_hand: int) -> None:
+        """Send client settings to the server."""
+        skin_parts = 0
+        if cape:
+            skin_parts |= 0x01
+        if jacket:
+            skin_parts |= 0x02
+        if left_sleeve:
+            skin_parts |= 0x04
+        if right_sleeve:
+            skin_parts |= 0x08
+        if left_pants:
+            skin_parts |= 0x10
+        if right_pants:
+            skin_parts |= 0x20
+        if hat:
+            skin_parts |= 0x40
+        await self.tcp.client_settings(locale, view_distance, chat_mode, chat_colors, skin_parts, main_hand)
+
+
+    async def open_advancement_tab(self, tab_id: str) -> None:
+        """Open a specific advancement tab."""
+        await self.tcp.advancement_tab(0, tab_id)
+
+    async def close_advancement_tab(self) -> None:
+        """Close the advancement tab."""
+        await self.tcp.advancement_tab(1)
+
+    async def set_resource_pack_status(self, result: int) -> None:
+        """Respond to a resource pack request."""
+        await self.tcp.resource_pack_status(result)
+
     # ============================== Network Operations ==============================
 
     async def send_initial_packets(self) -> None:
         await self.tcp.handshake_packet()
-
-        login_packet = self.tcp.login_packet(self.username)
-        await login_packet
+        await self.tcp.login_packet(self.username)
 
         # Performance warning for chunk loading
         if self._load_chunks:
@@ -126,18 +152,6 @@ class ConnectionState:
 
     # ============================== World State Management ==============================
     def get_block_state(self, position: math.Vector3D[int]) -> Optional[Block]:
-        """
-        Get the block state at a specific world position.
-
-        Args:
-            position: World position to query
-
-        Returns:
-            Block state if available, None otherwise
-
-        Raises:
-            RuntimeError: If chunk loading is disabled
-        """
         if not self._load_chunks:
             raise RuntimeError("Chunk loading is disabled - cannot query block states")
 
@@ -154,15 +168,6 @@ class ConnectionState:
         return section.get_state(block_pos)
 
     def set_block_state(self, state: Block) -> None:
-        """
-        Set the block state at a specific world position.
-
-        Args:
-            state: Block state to set
-
-        Raises:
-            RuntimeError: If chunk loading is disabled
-        """
         if not self._load_chunks:
             raise RuntimeError("Chunk loading is disabled - cannot modify block states")
 
@@ -180,16 +185,6 @@ class ConnectionState:
         section.set_state(block_pos, state)
 
     def set_block_entity(self, pos: math.Vector3D[int], block_entity: entities.entity.BaseEntity[str]) -> None:
-        """
-        Set a block entity at a specific world position.
-
-        Args:
-            pos: World position for the block entity
-            block_entity: Block entity instance to set
-
-        Raises:
-            RuntimeError: If chunk loading is disabled
-        """
         if not self._load_chunks:
             raise RuntimeError("Chunk loading is disabled - cannot modify block entities")
 
@@ -208,16 +203,6 @@ class ConnectionState:
 
     @staticmethod
     def _create_block_entity(entity_id: str, data: Any) -> entities.entity.BaseEntity[str]:
-        """
-        Create a block entity instance from NBT data.
-
-        Args:
-            entity_id: Minecraft block entity identifier
-            data: NBT data for the block entity
-
-        Returns:
-            Appropriate block entity instance
-        """
         entity = BLOCK_ENTITY_TYPES.get(entity_id)
 
         if entity:
@@ -277,11 +262,6 @@ class ConnectionState:
             self._dispatch('error', packet_id, error)
 
     async def parse_0x23(self, buffer: protocol.ProtocolBuffer) -> None:
-        """
-        Handle Join Game packet (0x23).
-
-        Processes initial game state including player info and server settings.
-        """
         # Parse player information
         entity_id = protocol.read_int(buffer)
         gamemode = protocol.read_ubyte(buffer)
@@ -303,14 +283,12 @@ class ConnectionState:
         self._dispatch('join')
 
     async def parse_0x1a(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Disconnect packet (0x1A)."""
         reason = protocol.read_chat(buffer)
         message = Message(reason)
 
         self._dispatch('disconnect', message)
 
     async def parse_0x0f(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Chat Message packet (0x0F)."""
         chat = protocol.read_chat(buffer)
         position = protocol.read_ubyte(buffer)
 
@@ -327,7 +305,6 @@ class ConnectionState:
         self.difficulty = difficulty
 
     async def parse_0x20(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Chunk Data packet (0x20)."""
         # Parse chunk metadata
         chunk_x = protocol.read_int(buffer)
         chunk_z = protocol.read_int(buffer)
@@ -365,7 +342,6 @@ class ConnectionState:
         self._dispatch('chunk_load', chunk)
 
     async def parse_0x1d(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Unload Chunk packet (0x1D)."""
         chunk_x = protocol.read_int(buffer)
         chunk_z = protocol.read_int(buffer)
         pos = math.Vector2D(chunk_x, chunk_z)
@@ -377,7 +353,6 @@ class ConnectionState:
         self._dispatch('chunk_unload', pos)
 
     async def parse_0x0a(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Block Action packet (0x0A)."""
         location = protocol.read_position(buffer)
         action_id = protocol.read_ubyte(buffer)
         action_param = protocol.read_ubyte(buffer)
@@ -385,7 +360,6 @@ class ConnectionState:
         self._dispatch('block_action', location, action_id, action_param, block_type)
 
     async def parse_0x0b(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Block Change packet (0x0B)."""
         position = protocol.read_position(buffer)
         block_state_id = protocol.read_varint(buffer)
 
@@ -401,7 +375,6 @@ class ConnectionState:
         self._dispatch('block_change', state)
 
     async def parse_0x39(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Camera packet (0x39)."""
         camera_entity_id = protocol.read_varint(buffer)
 
         if camera_entity_id in self.entities:
@@ -411,7 +384,6 @@ class ConnectionState:
 
 
     async def parse_0x10(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Multi Block Change packet (0x10)."""
         chunk_x = protocol.read_int(buffer)
         chunk_z = protocol.read_int(buffer)
         record_count = protocol.read_varint(buffer)
@@ -445,21 +417,6 @@ class ConnectionState:
         self._dispatch('multi_block_change', states)
 
     async def parse_0x0c(self, buffer) -> None:
-        """
-        Handle Boss Bar packet (0x0C).
-
-        This method parses the boss bar packet and dispatches appropriate events
-        based on the action type. Boss bars are stored in self.boss_bars dictionary.
-
-        Parameters
-        ----------
-        buffer : protocol.ProtocolBuffer
-            Network buffer containing the packet data
-
-        Actions dispatched:
-        - Actions: 0=Add, 1=Remove, 2=Update health, 3=Update title, 4=Update style, 5=Update flags
-        """
-        # Initialize boss_bars dict if it doesn't exist
         bar_uuid = protocol.read_uuid(buffer)
         action = protocol.read_varint(buffer)
         uuid_str = str(bar_uuid)
@@ -500,7 +457,6 @@ class ConnectionState:
                 self._dispatch('bossbar_update_flags', bar)
 
     async def parse_0x09(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Update Block Entity packet (0x09)."""
         # Parse packet data
         _ = protocol.read_position(buffer)
         _ = protocol.read_ubyte(buffer)
@@ -518,21 +474,18 @@ class ConnectionState:
 
     # USER
     async def parse_0x41(self, data: protocol.ProtocolBuffer) -> None:
-        """Update Health (Packet ID: 0x41)"""
         self.user.health = protocol.read_float(data)
         self.user.food = protocol.read_varint(data)
         self.user.food_saturation = protocol.read_float(data)
         self._dispatch('player_health_update', self.user.health, self.user.food, self.user.food_saturation)
 
     async def parse_0x40(self, data: protocol.ProtocolBuffer) -> None:
-        """Set Experience (Packet ID: 0x40)"""
         self.user.experience_bar = protocol.read_float(data)
         self.user.level = protocol.read_varint(data)
         self.user.total_experience = protocol.read_varint(data)
         self._dispatch('player_experience_set', self.user.level, self.user.total_experience, self.user.experience_bar)
 
     async def parse_0x21(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Effect packet (0x21)."""
         effect_id = protocol.read_int(buffer)
         location = protocol.read_position(buffer)
         data = protocol.read_int(buffer)
@@ -541,31 +494,11 @@ class ConnectionState:
         self._dispatch('effect', effect_id, location, data, disable_relative_volume)
 
     async def parse_0x3a(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Held Item Change (Packet ID: 0x3A)
-
-        Sent by the server to update which hotbar slot the player has selected.
-        """
         self.user.held_slot = protocol.read_byte(data)
         self._dispatch('held_slot_change', self.user.held_slot)
 
 
     async def parse_0x1e(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Change Game State (Packet ID: 0x1E)
-
-        Reason codes:
-            0: Invalid Bed
-            1: End Raining
-            2: Begin Raining
-            3: Change Gamemode (0=Survival, 1=Creative, 2=Adventure, 3=Spectator)
-            4: Exit End (0=No credits, 1=Show credits)
-            5: Demo Message (101=Move, 102=Jump, 103=Inventory)
-            6: Arrow hitting player
-            7: Fade value (1=Dark, 0=Bright)
-            8: Fade time (in ticks)
-            10: Elder Guardian effect
-        """
         reason = protocol.read_ubyte(data)
         value = protocol.read_float(data)
 
@@ -575,23 +508,6 @@ class ConnectionState:
         self._dispatch('game_state_change', reason, value)
 
     async def parse_0x2f(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Player Position and Look (Packet ID: 0x2F)
-
-        Sent by the server to update the player's position and rotation.
-        Also closes the "Downloading Terrain" screen after join/respawn.
-
-        Fields:
-            - X, Y, Z: Position (absolute or relative depending on flags)
-            - Yaw, Pitch: Rotation (absolute or relative depending on flags)
-            - Flags: Bit field
-                0x01 = relative X
-                0x02 = relative Y
-                0x04 = relative Z
-                0x08 = relative Yaw
-                0x10 = relative Pitch
-            - Teleport ID: must be acknowledged with a Teleport Confirm packet
-        """
         x = protocol.read_double(data)
         y = protocol.read_double(data)
         z = protocol.read_double(data)
@@ -618,23 +534,6 @@ class ConnectionState:
         self._dispatch('player_position_and_look', self.user.position, self.user.rotation)
 
     async def parse_0x22(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Particle (Packet ID: 0x22)
-
-        Displays the named particle.
-
-        Fields:
-            - Particle ID (Int): See particle ID reference
-            - Long Distance (Boolean): If true, particle distance increases from 256 to 65536
-            - X, Y, Z (Float): Position of the particle
-            - Offset X, Y, Z (Float): Added to position after being multiplied by random.nextGaussian()
-            - Particle Data (Float): The data of each particle
-            - Particle Count (Int): The number of particles to create
-            - Data (Array of VarInt): Length depends on particle type
-                - "iconcrack" has length of 2
-                - "blockcrack", "blockdust", "fallingdust" have length of 1
-                - Others have length of 0
-        """
         particle_id = protocol.read_int(data)
         long_distance = protocol.read_bool(data)
         x = protocol.read_float(data)
@@ -658,24 +557,6 @@ class ConnectionState:
                        particle_data, particle_count, data_array)
 
     async def parse_0x24(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Map (Packet ID: 0x24)
-
-        Updates a rectangular area on a map item.
-
-        Fields:
-            - Item Damage (VarInt): The damage value (map ID) of the map being modified
-            - Scale (Byte): From 0 for fully zoomed-in map (1 block per pixel) to 4 for fully zoomed-out map (16 blocks per pixel)
-            - Tracking Position (Boolean): Specifies whether the icons are shown
-            - Icon Count (VarInt): Number of elements in the following array
-            - Icon Direction And Type (Array): Each byte: 0xF0 = Type, 0x0F = Direction
-            - X, Z (Byte): Icon position coordinates
-            - Columns (Byte): Number of columns updated
-            - Rows (Optional Byte): Only if Columns > 0; number of rows updated
-            - X, Z (Optional Byte): Only if Columns > 0; offset of westernmost column and northernmost row
-            - Length (Optional VarInt): Only if Columns > 0; length of the following array
-            - Data (Optional Array of Unsigned Byte): Only if Columns > 0; see Map item format
-        """
         item_damage = protocol.read_varint(data)
         scale = protocol.read_byte(data)
         tracking_position = protocol.read_bool(data)
@@ -717,33 +598,11 @@ class ConnectionState:
         self._dispatch('map', item_damage, scale, tracking_position, icons, columns, rows, x_offset, z_offset, map_data)
 
     async def parse_0x46(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Spawn Position (Packet ID: 0x46)
-
-        Sent by the server to set the spawn location (where players respawn and compasses point to).
-        Can be sent at any time to update the compass target.
-        """
         x, y, z = protocol.read_position(data)
         self.user.spawn_point = math.Vector3D(x, y, z)
         self._dispatch('spawn_position', self.user.spawn_point)
 
     async def parse_0x35(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Respawn (Packet ID: 0x35)
-
-        Sent by the server to change the player's dimension.
-
-        Fields:
-            Dimension (Int): -1=Nether, 0=Overworld, 1=End
-            Difficulty (Unsigned Byte): 0=Peaceful, 1=Easy, 2=Normal, 3=Hard
-            Gamemode (Unsigned Byte): 0=Survival, 1=Creative, 2=Adventure, 3=Spectator
-            Level Type (String): World generation type, e.g. "default"
-
-        Notes:
-            Avoid respawning the player in the same dimension unless they are dead.
-            To force a respawn in the same dimension, send two respawn packets: one to a different dimension,
-            then the desired one.
-        """
         dimension = protocol.read_int(data)
         difficulty = protocol.read_ubyte(data)
         gamemode = protocol.read_ubyte(data)
@@ -757,7 +616,6 @@ class ConnectionState:
         self._dispatch('respawn', dimension, difficulty, gamemode, level_type)
 
     async def parse_0x25(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity (Packet ID: 0x25)"""
         entity_id = protocol.read_varint(buffer)
 
         if entity_id in self.entities:
@@ -766,12 +624,10 @@ class ConnectionState:
             _logger.warning(f"Entity keep-alive received for untracked entity ID: %s", entity_id)
 
     async def parse_0x2a(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Open Sign Editor (Packet ID: 0x2A)"""
         location = protocol.read_position(buffer)
         self._dispatch('open_sign_editor', math.Vector3D(*location))
 
     async def parse_0x2d(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Combat Event (Packet ID: 0x2D)"""
         event = protocol.read_varint(buffer)
 
         if event == 0:
@@ -805,12 +661,10 @@ class ConnectionState:
             self._dispatch('player_death', player, entity, Message(message))
 
     async def parse_0x18(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Plugin Message packet (0x18)."""
         channel = protocol.read_string(buffer)
         self._dispatch('plugin_message', channel, buffer.getvalue())
 
     async def parse_0x19(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Named Sound Effect packet (0x19)."""
         sound_name = protocol.read_string(buffer)
         sound_category = protocol.read_varint(buffer)
 
@@ -825,7 +679,6 @@ class ConnectionState:
         self._dispatch('named_sound_effect', sound_name, sound_category, position, volume, pitch)
 
     async def parse_0x07(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Statistics packet (0x07)."""
         count = protocol.read_varint(buffer)
         statistics = []
 
@@ -837,7 +690,6 @@ class ConnectionState:
         self._dispatch('statistics', statistics)
 
     async def parse_0x06(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Animation packet (0x06)."""
         entity_id = protocol.read_varint(buffer)
         animation_id = protocol.read_ubyte(buffer)
 
@@ -846,7 +698,6 @@ class ConnectionState:
             self._dispatch('entity_animation', entity, animation_id)
 
     async def parse_0x08(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Block Break Animation packet (0x08)."""
         entity_id = protocol.read_varint(buffer)
         location = protocol.read_position(buffer)
         destroy_stage = protocol.read_byte(buffer)
@@ -856,16 +707,6 @@ class ConnectionState:
             self._dispatch('block_break_animation', entity, location, destroy_stage)
 
     async def parse_0x2b(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Craft Recipe Response (Packet ID: 0x2B)
-
-        Response to the serverbound packet (Craft Recipe Request), with the same recipe ID.
-        Appears to be used to notify the UI.
-
-        Fields:
-            - Window ID (Byte): The window ID
-            - Recipe (VarInt): A recipe ID
-        """
         window_id = protocol.read_byte(data)
         recipe = protocol.read_varint(data)
 
@@ -876,7 +717,6 @@ class ConnectionState:
             _logger.warning(f"Received craft recipe response for unknown window ID: %s", window_id)
 
     async def parse_0x2e(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Player List Item (Packet ID: 0x2E)"""
         action = protocol.read_varint(buffer)
         number_of_players = protocol.read_varint(buffer)
 
@@ -954,7 +794,6 @@ class ConnectionState:
                 self._dispatch(event_name, players_affected)
 
     async def parse_0x05(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Spawn Player (Packet ID: 0x05)"""
         entity_id = protocol.read_varint(buffer)
         player_uuid = protocol.read_uuid(buffer)
         x = protocol.read_double(buffer)
@@ -969,13 +808,11 @@ class ConnectionState:
         self._dispatch('spawn_player', player)
 
     async def parse_0x0e(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Tab-Complete packet (0x0E)."""
         count = protocol.read_varint(buffer)
         matches = [protocol.read_string(buffer) for _ in range(count)]
         self._dispatch('tab_complete', matches)
 
     async def parse_0x4e(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Properties (Packet ID: 0x4E)"""
         entity_id = protocol.read_varint(buffer)
         num_properties = protocol.read_int(buffer)
 
@@ -1001,7 +838,6 @@ class ConnectionState:
             _logger.warning(f"Unknown entity ID: '%s', with properties: %s", entity_id, properties)
 
     async def parse_0x4c(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Teleport (Packet ID: 0x4C)"""
         entity_id = protocol.read_varint(buffer)
         x = protocol.read_double(buffer)
         y = protocol.read_double(buffer)
@@ -1024,12 +860,9 @@ class ConnectionState:
         z = protocol.read_double(buffer)
         yaw = protocol.read_float(buffer)
         pitch = protocol.read_float(buffer)
-
-
         self._dispatch('vehicle_move', math.Vector3D(x, y, z), math.Rotation(yaw, pitch))
 
     async def parse_0x26(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Relative Move (Packet ID: 0x26)"""
         entity_id = protocol.read_varint(buffer)
         delta_x = protocol.read_short(buffer)
         delta_y = protocol.read_short(buffer)
@@ -1052,7 +885,6 @@ class ConnectionState:
             self._dispatch('entity_move', entity, delta, on_ground)
 
     async def parse_0x27(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Look And Relative Move (Packet ID: 0x27)"""
         entity_id = protocol.read_varint(buffer)
         delta_x_raw = protocol.read_short(buffer)  # Change in position * 4096
         delta_y_raw = protocol.read_short(buffer)
@@ -1084,7 +916,6 @@ class ConnectionState:
             self._dispatch('entity_move_look', entity, delta, on_ground)
 
     async def parse_0x28(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Look (Packet ID: 0x28)"""
         entity_id = protocol.read_varint(buffer)
         yaw = protocol.read_angle(buffer)
         pitch = protocol.read_angle(buffer)
@@ -1097,7 +928,6 @@ class ConnectionState:
             self._dispatch('entity_look', entity, on_ground)
 
     async def parse_0x36(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Head Look (Packet ID: 0x36)"""
         entity_id = protocol.read_varint(buffer)
         head_yaw = protocol.read_angle(buffer)
 
@@ -1108,7 +938,6 @@ class ConnectionState:
             self._dispatch('entity_head_look', entity)
 
     async def parse_0x03(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Spawn Mob (Packet ID: 0x03)"""
         entity_id = protocol.read_varint(buffer)
         entity_uuid = protocol.read_uuid(buffer)
         mob_type = protocol.read_varint(buffer)
@@ -1132,7 +961,6 @@ class ConnectionState:
 
 
     async def parse_0x3e(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Velocity (Packet ID: 0x3E)"""
         entity_id = protocol.read_varint(buffer)
         v_x = protocol.read_short(buffer) / 8000.0 * 20
         v_y = protocol.read_short(buffer) / 8000.0 * 20
@@ -1142,7 +970,6 @@ class ConnectionState:
             self._dispatch('entity_velocity', self.entities[entity_id],  math.Vector3D(v_x, v_y, v_z))
 
     async def parse_0x3c(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Metadata (Packet ID: 0x3C)"""
         entity_id = protocol.read_varint(buffer)
         metadata = protocol.read_entity_metadata(buffer)
 
@@ -1152,13 +979,11 @@ class ConnectionState:
             self._dispatch('entity_metadata', entity, metadata)
 
     async def parse_0x3d(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Attach Entity packet (0x3D)."""
         attached_entity_id = protocol.read_int(buffer)
         holding_entity_id = protocol.read_int(buffer)
         self._dispatch('entity_leash', attached_entity_id, holding_entity_id)
 
     async def parse_0x3f(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Equipment (Packet ID: 0x3F)"""
         entity_id = protocol.read_varint(buffer)
         slot_index = protocol.read_varint(buffer)
         item_data = protocol.read_slot(buffer)
@@ -1184,7 +1009,6 @@ class ConnectionState:
             self._dispatch('entity_equipment', entity, slot)
 
     async def parse_0x32(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Destroy Entities (Packet ID: 0x32)"""
         count = protocol.read_varint(buffer)
         entity_ids = [protocol.read_varint(buffer) for _ in range(count)]
         destroyed = {eid: self.entities.pop(eid, None) for eid in entity_ids if eid in self.entities}
@@ -1193,7 +1017,6 @@ class ConnectionState:
             self._dispatch('destroy_entities', list(destroyed.values()))
 
     async def parse_0x1b(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Entity Status (Packet ID: 0x1B)"""
         entity_id = protocol.read_int(buffer)
         status = protocol.read_byte(buffer)
 
@@ -1203,7 +1026,6 @@ class ConnectionState:
             _logger.warning(f"Unknown entity ID: '%s', with status: %s", entity_id, status)
 
     async def parse_0x1c(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Explosion packet (0x1C)."""
         x = protocol.read_float(buffer)
         y = protocol.read_float(buffer)
         z = protocol.read_float(buffer)
@@ -1222,9 +1044,7 @@ class ConnectionState:
 
         self._dispatch('explosion', position,radius, records, player_motion)
 
-    # Object
     async def parse_0x00(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Spawn Object (Packet ID: 0x00)"""
         entity_id = protocol.read_varint(buffer)
         entity_uuid = protocol.read_uuid(buffer)
         obj_type = protocol.read_byte(buffer)
@@ -1247,7 +1067,6 @@ class ConnectionState:
 
 
     async def parse_0x04(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Spawn Painting (Packet ID: 0x04)"""
         entity_id = protocol.read_varint(buffer)
         entity_uuid = protocol.read_uuid(buffer)
         title = protocol.read_string(buffer, max_length=13)
@@ -1261,7 +1080,6 @@ class ConnectionState:
         self._dispatch('spawn_painting', entity)
 
     async def parse_0x47(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Time Update (Packet ID: 0x47)"""
         world_age = protocol.read_long(buffer)
         time_of_day = protocol.read_long(buffer)
         self.world_age = world_age
@@ -1270,7 +1088,6 @@ class ConnectionState:
 
 
     async def parse_0x02(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Spawn Global Entity (Packet ID: 0x02)"""
         entity_id = protocol.read_varint(buffer)
         entity_type = protocol.read_byte(buffer)
         x = protocol.read_double(buffer)
@@ -1283,7 +1100,6 @@ class ConnectionState:
         self._dispatch('spawn_global_entity', entity)
 
     async def parse_0x01(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Spawn Experience Orb (Packet ID: 0x01)"""
         entity_id = protocol.read_varint(buffer)
         x = protocol.read_double(buffer)
         y = protocol.read_double(buffer)
@@ -1297,7 +1113,6 @@ class ConnectionState:
         self._dispatch('spawn_experience_orb', entity)
 
     async def parse_0x11(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Confirm Transaction (Packet ID: 0x11)"""
         window_id = protocol.read_byte(buffer)
         action_number = protocol.read_short(buffer)
         accepted = protocol.read_bool(buffer)
@@ -1305,7 +1120,6 @@ class ConnectionState:
         self._dispatch('transaction_confirmed', window_id, action_number, accepted)
 
     async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Close Window (Packet ID: 0x12)"""
         window_id = protocol.read_ubyte(buffer)
 
         if window_id in self.windows:
@@ -1314,7 +1128,6 @@ class ConnectionState:
         self._dispatch('window_closed', window_id)
 
     async def parse_0x13(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Open Window (Packet ID: 0x13)"""
         window_id = protocol.read_ubyte(buffer)
         window_type = protocol.read_string(buffer, max_length=32)
         window_title = protocol.read_chat(buffer)
@@ -1331,7 +1144,6 @@ class ConnectionState:
         self._dispatch('window_opened', window)
 
     async def parse_0x14(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Window Items (Packet ID: 0x14)"""
         window_id = protocol.read_ubyte(buffer)
         count = protocol.read_short(buffer)
 
@@ -1350,7 +1162,6 @@ class ConnectionState:
         self._dispatch('window_items_updated', window)
 
     async def parse_0x15(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Window Property (Packet ID: 0x15)"""
         window_id = protocol.read_ubyte(buffer)
         property_id = protocol.read_short(buffer)
         value = protocol.read_short(buffer)
@@ -1364,7 +1175,6 @@ class ConnectionState:
         self._dispatch('window_property_changed', window, property_id, value)
 
     async def parse_0x16(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Set Slot (Packet ID: 0x16)"""
         window_id = protocol.read_byte(buffer)
         slot_index = protocol.read_short(buffer)
         slot_data = protocol.read_slot(buffer)
@@ -1390,7 +1200,6 @@ class ConnectionState:
             self._dispatch('window_slot_changed', window, updated_slot)
 
     async def parse_0x30(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Use Bed packet (0x30)."""
         entity_id = protocol.read_varint(buffer)
         location = protocol.read_position(buffer)
 
@@ -1400,14 +1209,12 @@ class ConnectionState:
             _logger.warning(f"Untracked entity ID: %s, used bed", entity_id)
 
     async def parse_0x17(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Set Cooldown packet (0x17)."""
         item_id = protocol.read_varint(buffer)
         cooldown_ticks = protocol.read_varint(buffer)
 
         self._dispatch('set_cooldown', item_id, cooldown_ticks)
 
     async def parse_0x4f(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Entity Effect packet (0x4F)."""
         entity_id = protocol.read_varint(buffer)
         effect_id = protocol.read_byte(buffer)
         amplifier = protocol.read_byte(buffer)
@@ -1424,7 +1231,6 @@ class ConnectionState:
             _logger.warning(f"Untracked entity ID: %s, effect added ID: %s", entity_id, effect_id)
 
     async def parse_0x33(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Remove Entity Effect packet (0x33)."""
         entity_id = protocol.read_varint(buffer)
         effect_id = protocol.read_byte(buffer)
 
@@ -1434,14 +1240,12 @@ class ConnectionState:
             _logger.warning(f"Untracked entity ID: %s, effect removed", entity_id)
 
     async def parse_0x34(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Resource Pack Send packet (0x34)."""
         url = protocol.read_string(buffer)
         hash_ = protocol.read_string(buffer)
 
         self._dispatch('resource_pack_send', url, hash_)
 
     async def parse_0x31(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Unlock Recipes packet (0x31)."""
         action = protocol.read_varint(buffer)
         crafting_book_open = protocol.read_bool(buffer)
         filtering_craftable = protocol.read_bool(buffer)
@@ -1457,12 +1261,6 @@ class ConnectionState:
         self._dispatch('unlock_recipes', action, crafting_book_open, filtering_craftable, recipes_1, recipes_2)
 
     async def parse_0x2c(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Player Abilities (Packet ID: 0x2C)
-
-        The latter 2 floats are used to indicate the field of view and flying speed respectively,
-        while the first byte is used to determine the value of 4 booleans.
-        """
         flags = protocol.read_byte(data)
         flying_speed = protocol.read_float(data)
         fov_modifier = protocol.read_float(data)
@@ -1535,11 +1333,6 @@ class ConnectionState:
 
     # Enhanced packet parsing methods
     async def parse_0x3b(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Display Scoreboard (Packet ID: 0x3B)
-
-        Sent to the client when it should display a scoreboard.
-        """
         position = protocol.read_byte(data)
         score_name = protocol.read_string(data, 16)
 
@@ -1551,11 +1344,6 @@ class ConnectionState:
         self._dispatch('scoreboard_display', position, score_name)
 
     async def parse_0x42(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Scoreboard Objective (Packet ID: 0x42)
-
-        Sent to the client when it should create a new scoreboard objective or remove one.
-        """
         objective_name = protocol.read_string(data, 16)
         mode = protocol.read_byte(data)
 
@@ -1579,11 +1367,6 @@ class ConnectionState:
         self._dispatch('scoreboard_objective', objective_name, mode)
 
     async def parse_0x45(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Update Score (Packet ID: 0x45)
-
-        Sent to the client when it should update a scoreboard item.
-        """
         entity_name = protocol.read_string(data, 40)
         action = protocol.read_byte(data)
         objective_name = protocol.read_string(data, 16)
@@ -1602,12 +1385,6 @@ class ConnectionState:
         self._dispatch('scoreboard_score_update', entity_name, objective_name, action, value)
 
     async def parse_0x48(self, data: protocol.ProtocolBuffer) -> None:
-        """
-        Title (Packet ID: 0x48)
-
-        Sent to display title text to the client. Can set title, subtitle, action bar text,
-        timing parameters, or control visibility.
-        """
         action = protocol.read_varint(data)
 
         if action == 0:
@@ -1644,7 +1421,6 @@ class ConnectionState:
             self._dispatch('title_reset')
 
     async def parse_0x49(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Sound Effect packet (0x49)."""
         sound_id = protocol.read_varint(buffer)
         category = protocol.read_varint(buffer)
         x = protocol.read_int(buffer)
@@ -1657,7 +1433,6 @@ class ConnectionState:
         self._dispatch('sound_effect', sound_id, category, position, volume, pitch)
 
     async def parse_0x4a(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Player List Header and Footer packet (0x4A)."""
         header = protocol.read_chat(buffer)
         footer = protocol.read_chat(buffer)
         self._dispatch('player_list_header_footer', Message(header), Message(footer))
@@ -1680,7 +1455,6 @@ class ConnectionState:
                        self.entities[collector_entity_id])
 
     async def parse_0x4d(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Advancements (Packet ID: 0x4D)"""
         reset_clear = protocol.read_bool(buffer)
         mapping_size = protocol.read_varint(buffer)
         advancements = {}
@@ -1736,13 +1510,11 @@ class ConnectionState:
 
         self._dispatch('advancements_update', advancements_data)
     async def parse_0x57(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Advancements (Packet ID: 0x57)"""
         reset = protocol.read_bool(buffer)
         advancement_count = protocol.read_varint(buffer)
         self._dispatch('advancements', reset, advancement_count, buffer.getvalue())
 
     async def parse_0x37(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Select Advancement Tab packet (0x37)."""
         has_id = protocol.read_bool(buffer)
         identifier = protocol.read_string(buffer) if has_id else None
         self._dispatch('select_advancement_tab', identifier)

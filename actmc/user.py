@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .entities.entity import BaseEntity
 from .entities.player import Player
+from .entities import misc
 from typing import TYPE_CHECKING, overload
 from .math import Vector3D, Rotation
 
@@ -105,13 +106,13 @@ class User(Player):
             self.rotation = rotation
 
         if position is not None and rotation is not None:
-            await self._state.send_player_position_and_look(self.position, self.rotation, on_ground)
+            await self._state.tcp.player_position_and_look(self.position, self.rotation, on_ground)
         elif position is not None:
-            await self._state.send_player_position(self.position, on_ground)
+            await self._state.tcp.player_position(self.position, on_ground)
         elif rotation is not None:
-            await self._state.send_player_look(self.rotation, on_ground)
+            await self._state.tcp.player_look(self.rotation, on_ground)
         else:
-            await self._state.send_player_ground(on_ground)
+            await self._state.tcp.player_ground(on_ground)
 
     async def sneak(self, state: bool = True) -> None:
         """
@@ -122,7 +123,7 @@ class User(Player):
         state: bool
             True to start sneaking, False to stop sneaking. Default is True.
         """
-        await self._state.send_entity_action(self.id, 0 if state else 1)
+        await self._state.tcp.entity_action(self.id, 0 if state else 1, 0)
 
     async def sprint(self, state: bool = True) -> None:
         """
@@ -133,7 +134,7 @@ class User(Player):
         state: bool
             True to start sprinting, False to stop sprinting. Default is True.
         """
-        await self._state.send_entity_action(self.id, 3 if state else 4)
+        await self._state.tcp.entity_action(self.id, 3 if state else 4, 0)
 
     @overload
     async def action(self, action_id: Literal[5], jump_boost: int) -> None:
@@ -164,11 +165,7 @@ class User(Player):
         jump_boost: int
             Jump strength (0-100) used only with action_id 5.
         """
-        await self._state.send_entity_action(self.id, action_id, jump_boost)
-
-    async def respawn(self) -> None:
-        """Perform a respawn"""
-        await self._state.send_client_status(0)
+        await self._state.tcp.entity_action(self.id, action_id, jump_boost)
 
     async def interact_with(self, entity: BaseEntity, hand: Literal[0, 1] = 0) -> None:
         """
@@ -181,7 +178,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand used to interact (0 = main hand, 1 = off-hand).
         """
-        await self._state.send_use_entity_interact(entity.id, hand=hand)
+        await self._state.tcp.use_entity(entity.id, 0, hand=hand)
 
     async def attack(self, entity: BaseEntity) -> None:
         """
@@ -192,7 +189,7 @@ class User(Player):
         entity: BaseEntity
             The target entity.
         """
-        await self._state.send_use_entity_attack(entity.id)
+        await self._state.tcp.use_entity(entity.id, 1)
 
     async def interact_at(self, entity: BaseEntity, hitbox: Vector3D[float], hand: Literal[0, 1] = 0) -> None:
         """
@@ -207,7 +204,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand used to interact (0 = main hand, 1 = off-hand).
         """
-        await self._state.send_use_entity_interact_at(entity.id, hitbox=hitbox, hand=hand)
+        await self._state.tcp.use_entity(entity.id,2, hitbox=hitbox, hand=hand)
 
     async def swing_arm(self, hand: Literal[0, 1] = 0) -> None:
         """
@@ -218,7 +215,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand to swing (0 = main hand, 1 = off-hand).
         """
-        await self._state.send_swing_arm(hand)
+        await self._state.tcp.swing_arm(hand)
 
     async def use_item(self, hand: Literal[0, 1] = 0) -> None:
         """
@@ -237,7 +234,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand to use the item with (0 = main hand, 1 = off hand).
         """
-        await self._state.send_use_item(hand)
+        await self._state.tcp.use_item(hand)
 
     async def release_item_use(self) -> None:
         """
@@ -245,7 +242,7 @@ class User(Player):
 
         For example, shooting a bow, finishing eating, or using buckets.
         """
-        await self._state.send_player_digging(5, Vector3D(0, 0, 0), 0)
+        await self._state.tcp.player_digging(5, Vector3D(0, 0, 0), 0)
 
     async def start_digging(self, position: Vector3D[int], face: int) -> None:
         """
@@ -258,7 +255,7 @@ class User(Player):
         face: int
             The face of the block being targeted (0=down, 1=up, 2=north, 3=south, 4=west, 5=east).
         """
-        await self._state.send_player_digging(0, position, face)
+        await self._state.tcp.player_digging(0, position, face)
 
     async def cancel_digging(self, position: Vector3D[int], face: int) -> None:
         """
@@ -271,7 +268,7 @@ class User(Player):
         face: int
             The face of the block being targeted.
         """
-        await self._state.send_player_digging(1, position, face)
+        await self._state.tcp.player_digging(1, position, face)
 
     async def finish_digging(self, position: Vector3D[int], face: int) -> None:
         """
@@ -284,7 +281,7 @@ class User(Player):
         face: int
             The face of the block being targeted.
         """
-        await self._state.send_player_digging(2, position, face)
+        await self._state.tcp.player_digging(2, position, face)
 
     async def drop_item_stack(self) -> None:
         """
@@ -293,7 +290,7 @@ class User(Player):
         This corresponds to pressing the drop key with a modifier to drop the full stack.
         Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
         """
-        await self._state.send_player_digging(3, Vector3D(0, 0, 0), 0)
+        await self._state.tcp.player_digging(3, Vector3D(0, 0, 0), 0)
 
     async def drop_item(self) -> None:
         """
@@ -302,7 +299,7 @@ class User(Player):
         This corresponds to pressing the drop key without modifiers.
         Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
         """
-        await self._state.send_player_digging(4, Vector3D(0, 0, 0), 0)
+        await self._state.tcp.player_digging(4, Vector3D(0, 0, 0), 0)
 
 
     async def swap_item_in_hand(self) -> None:
@@ -312,4 +309,201 @@ class User(Player):
         Used to swap or assign an item to the offhand slot.
         Position is set to (0, 0, 0) and face is set to down (0) as per protocol.
         """
-        await self._state.send_player_digging(6, Vector3D(0, 0, 0), 0)
+        await self._state.tcp.player_digging(6, Vector3D(0, 0, 0), 0)
+
+    async def toggle_flight(self) -> None:
+        """
+        Toggle flight mode on/off.
+
+        This automatically handles the flight state based on current abilities.
+        Only works if the player has flight permissions (creative mode, etc.).
+        """
+        if not hasattr(self, 'allow_flying') or not self.allow_flying:
+            return
+
+        # Toggle flying state
+        new_flying_state = not getattr(self, 'flying', False)
+        self.flying = new_flying_state
+
+        # Build flags based on current abilities
+        flags = 0
+        if getattr(self, 'invulnerable', False):
+            flags |= 0x08  # Damage disabled
+        if getattr(self, 'allow_flying', False):
+            flags |= 0x04
+        if new_flying_state:
+            flags |= 0x02
+        if getattr(self, 'creative_mode', False):
+            flags |= 0x01
+
+        flying_speed = getattr(self, 'flying_speed', 0.05)
+        walking_speed = 0.1  # Default walking speed
+
+        await self._state.tcp.player_abilities(flags, flying_speed, walking_speed)
+
+    async def change_held_slot(self, slot: int) -> None:
+        """
+        Change the selected hotbar slot.
+
+        Parameters
+        ----------
+        slot: int
+            The hotbar slot to select (0-8).
+        """
+        if not 0 <= slot <= 8:
+            raise ValueError("Slot must be between 0 and 8")
+
+        self.held_slot = slot
+        await self._state.tcp.held_item_change(slot)
+
+    async def place_block(self, position: Vector3D[int], face: int, hand: Literal[0, 1] = 0,
+                          cursor: Vector3D[float] = None) -> None:
+        """
+        Place a block at the specified position.
+
+        Parameters
+        ----------
+        position: Vector3D[int]
+            The position to place the block at.
+        face: int
+            The face of the block being targeted (0=down, 1=up, 2=north, 3=south, 4=west, 5=east).
+        hand: Literal[0, 1]
+            Hand to use for placement (0 = main hand, 1 = off hand).
+        cursor: Vector3D[float]
+            The cursor position on the face (defaults to center if not provided).
+        """
+        if cursor is None:
+            cursor = Vector3D(0.5, 0.5, 0.5)
+
+        await self._state.tcp.player_block_placement(position, face, hand, cursor)
+
+    async def update_sign_text(self, position: Vector3D[float], line1: str = "", line2: str = "",
+                               line3: str = "", line4: str = "") -> None:
+        """
+        Update the text on a sign.
+
+        Parameters
+        ----------
+        position: Vector3D[float]
+            The position of the sign.
+        line1: str
+            First line of text.
+        line2: str
+            Second line of text.
+        line3: str
+            Third line of text.
+        line4: str
+            Fourth line of text.
+        """
+        await self._state.tcp.update_sign(position, line1, line2, line3, line4)
+
+    async def move_vehicle(self, position: Vector3D[float], yaw: float, pitch: float) -> None:
+        """
+        Move a vehicle (boat, minecart, etc.) that the player is riding.
+
+        Parameters
+        ----------
+        position: Vector3D[float]
+            The absolute position of the vehicle.
+        yaw: float
+            The absolute yaw rotation in degrees.
+        pitch: float
+            The absolute pitch rotation in degrees.
+        """
+        await self._state.tcp.vehicle_move(position, yaw, pitch)
+
+    async def steer_boat(self, right_paddle: bool, left_paddle: bool) -> None:
+        """
+        Control boat paddle movement for visual effects.
+
+        Parameters
+        ----------
+        right_paddle: bool
+            Whether the right paddle is turning.
+        left_paddle: bool
+            Whether the left paddle is turning.
+        """
+        await self._state.tcp.steer_boat(right_paddle, left_paddle)
+
+    async def set_creative_item(self, slot: int, item: misc.Item) -> None:
+        """
+        Set an item in a creative mode inventory slot.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to set the item in.
+        item: misc.Item
+            The item to place in the slot.
+        """
+        await self._state.tcp.creative_inventory_action(slot, item.to_dict())
+
+    async def clear_creative_slot(self, slot: int) -> None:
+        """
+        Clear (delete) an item from a creative mode inventory slot.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to clear.
+        """
+        await self._state.tcp.creative_inventory_action(slot, None)
+
+    async def drop_creative_item(self, item: misc.Item) -> None:
+        """
+        Drop an item from creative inventory (spawn it in the world).
+
+        Parameters
+        ----------
+        item: misc.Item
+            The item to drop/spawn in the world.
+        """
+        await self._state.tcp.creative_inventory_action(-1, item.to_dict())
+
+    async def pickup_creative_item(self, slot: int) -> None:
+        """
+        Pick up (delete) an item from a creative inventory slot.
+
+        In creative mode, "picking up" an item actually deletes it from the server.
+        This is equivalent to clearing the slot.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to pick up from.
+        """
+        await self._state.tcp.creative_inventory_action(slot, None)
+
+    async def creative_inventory_action(self, slot: int, clicked_item: Optional[misc.Item]) -> None:
+        """
+        Perform a raw creative inventory action.
+
+        This is the underlying method that handles all creative inventory interactions.
+        Consider using the more specific methods like set_creative_item(), clear_creative_slot(),
+        drop_creative_item(), or pickup_creative_item() instead.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to interact with.
+            Use -1 to drop an item outside the inventory.
+        clicked_item: Optional[misc.Item]
+            The item to set in the slot, or None to clear the slot.
+        """
+        item_data = clicked_item.to_dict() if clicked_item else None
+        await self._state.tcp.creative_inventory_action(slot, item_data)
+
+    async def craft_recipe(self, window_id: int, recipe_id: int, make_all: bool = False) -> None:
+        """
+        Request to craft a recipe from the recipe book.
+
+        Parameters
+        ----------
+        window_id: int
+            The crafting window ID.
+        recipe_id: int
+            The recipe ID to craft.
+        make_all: bool
+            Whether to craft as many as possible (shift-click behavior).
+        """
+        await self._state.tcp.craft_recipe_request(window_id, recipe_id, make_all)

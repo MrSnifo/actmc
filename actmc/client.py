@@ -55,10 +55,6 @@ class Client:
     async def time_of_day(self) -> Optional[int]:
         return self._connection.time_of_day
 
-    async def perform_respawn(self) -> None:
-        """Respawn"""
-        await self._connection.send_client_status(0)
-
     def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
         return self._connection.get_block_state(pos)
 
@@ -164,9 +160,90 @@ class Client:
             await self._async_loop()
         await self.connect(host, port)
 
-    @staticmethod
-    async def handle_packet(data: bytes):
-        print(f"[Client] Received packet: {data.hex()}")
+
+    async def respawn_user(self) -> None:
+        """Perform a respawn"""
+        await self._connection.respawn()
+
+    async def send_client_settings(self, locale: str = 'en_US', view_distance: int = 10,
+                                   chat_mode: int = 0, chat_colors: bool = True,
+                                   cape: bool = True, jacket: bool = True, left_sleeve: bool = True,
+                                   right_sleeve: bool = True, left_pants: bool = True,
+                                   right_pants: bool = True, hat: bool = True,
+                                   main_hand: int = 1) -> None:
+        """
+        Send client settings to the server.
+
+        Parameters
+        ----------
+        locale: str
+            Client locale (e.g., "en_US").
+        view_distance: int
+            Render distance (2-32).
+        chat_mode: int
+            Chat mode (0=enabled, 1=commands only, 2=hidden).
+        chat_colors: bool
+            Whether to display chat colors.
+        cape: bool
+            Whether to display cape.
+        jacket: bool
+            Whether to display jacket overlay.
+        left_sleeve: bool
+            Whether to display left sleeve overlay.
+        right_sleeve: bool
+            Whether to display right sleeve overlay.
+        left_pants: bool
+            Whether to display left pants overlay.
+        right_pants: bool
+            Whether to display right pants overlay.
+        hat: bool
+            Whether to display hat overlay.
+        main_hand: int
+            Main hand (0=left, 1=right).
+        """
+        skin_parts = 0
+        if cape:
+            skin_parts |= 0x01
+        if jacket:
+            skin_parts |= 0x02
+        if left_sleeve:
+            skin_parts |= 0x04
+        if right_sleeve:
+            skin_parts |= 0x08
+        if left_pants:
+            skin_parts |= 0x10
+        if right_pants:
+            skin_parts |= 0x20
+        if hat:
+            skin_parts |= 0x40
+        await self._connection.send_client_settings(locale, view_distance, chat_mode, chat_colors, cape, jacket,
+                                                    left_sleeve, right_sleeve, left_pants, right_pants, hat, main_hand)
+
+    async def open_advancement_tab(self, tab_id: str) -> None:
+        """
+        Open a specific advancement tab.
+
+        Parameters
+        ----------
+        tab_id: str
+            The advancement tab identifier.
+        """
+        await self._connection.open_advancement_tab( tab_id)
+
+    async def close_advancement_tab(self) -> None:
+        """Close the advancement tab."""
+        await self.tcp.advancement_tab(1)
+
+    async def set_resource_pack_status(self, result: int) -> None:
+        """
+        Respond to a resource pack request.
+
+        Parameters
+        ----------
+        result: int
+            Status code (0=loaded, 1=declined, 2=failed, 3=accepted).
+        """
+        await self._connection.set_resource_pack_status(result)
 
     def run(self,
             host: str, port: Optional[int] = 25565,

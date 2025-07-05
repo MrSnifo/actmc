@@ -153,21 +153,10 @@ class TcpClient:
         """Confirm server teleport request."""
         return self.write_packet(0x00, protocol.ProtocolBuffer(protocol.write_varint(teleport_id)))
 
-    def player_ground(self, on_ground: bool) -> Coroutine[Any, Any, None]:
-        """Send player ground state packet."""
-        return self.write_packet(0x0C, protocol.ProtocolBuffer(protocol.pack_bool(on_ground)))
-
-    def player_look(self, rotation: math.Rotation, on_ground: bool) -> Coroutine[Any, Any, None]:
-        """Send player rotation update packet."""
-        buffer = protocol.ProtocolBuffer()
-        buffer.write(protocol.pack_float(rotation.yaw))
-        buffer.write(protocol.pack_float(rotation.pitch))
-        buffer.write(protocol.pack_bool(on_ground))
-        return self.write_packet(0x0F, buffer)
-
-    def player_position_and_look_packet(self, position: math.Vector3D[float],
-                                        rotation: math.Rotation,
-                                        on_ground: bool) -> Coroutine[Any, Any, None]:
+    def player_position_and_look(self,
+                                 position: math.Vector3D[float],
+                                 rotation: math.Rotation,
+                                 on_ground: bool) -> Coroutine[Any, Any, None]:
         """Send combined player position and rotation update packet."""
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.pack_double(position.x))
@@ -175,6 +164,7 @@ class TcpClient:
         buffer.write(protocol.pack_double(position.z))
         buffer.write(protocol.pack_float(rotation.yaw))
         buffer.write(protocol.pack_float(rotation.pitch))
+        buffer.write(protocol.pack_bool(on_ground))
         return self.write_packet(0x0E, buffer)
 
     def player_position(self, position: math.Vector3D[float], on_ground: bool) -> Coroutine[Any, Any, None]:
@@ -185,6 +175,40 @@ class TcpClient:
         buffer.write(protocol.pack_double(position.z))
         buffer.write(protocol.pack_bool(on_ground))
         return self.write_packet(0x0D, buffer)
+
+    def player_look(self, rotation: math.Rotation, on_ground: bool) -> Coroutine[Any, Any, None]:
+        """Send player rotation update packet."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_float(rotation.yaw))
+        buffer.write(protocol.pack_float(rotation.pitch))
+        buffer.write(protocol.pack_bool(on_ground))
+        return self.write_packet(0x0F, buffer)
+
+    def player_ground(self, on_ground: bool) -> Coroutine[Any, Any, None]:
+        """Send player ground state packet."""
+        return self.write_packet(0x0C, protocol.ProtocolBuffer(protocol.pack_bool(on_ground)))
+
+    def vehicle_move(self, position: math.Vector3D[float], yaw: float, pitch: float) -> Coroutine[Any, Any, None]:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_double(position.x))
+        buffer.write(protocol.pack_double(position.y))
+        buffer.write(protocol.pack_double(position.z))
+        buffer.write(protocol.pack_float(yaw))
+        buffer.write(protocol.pack_float(pitch))
+        return self.write_packet(0x10, buffer)
+
+    def steer_boat(self, right_paddle_turning: bool, left_paddle_turning: bool) -> Coroutine[Any, Any, None]:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_bool(right_paddle_turning))
+        buffer.write(protocol.pack_bool(left_paddle_turning))
+        return self.write_packet(0x11, buffer)
+
+    def player_abilities(self, flags: int, flying_speed: float, walking_speed: float) -> Coroutine[Any, Any, None]:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_byte(flags))
+        buffer.write(protocol.pack_float(flying_speed))
+        buffer.write(protocol.pack_float(walking_speed))
+        return self.write_packet(0x13, buffer)
 
     def use_item(self, hand: int) -> Coroutine[Any, Any, None]:
         """Send use item packet (right-click with item)."""
@@ -229,6 +253,13 @@ class TcpClient:
         buffer.write(protocol.pack_bool(accepted))
         return self.write_packet(0x05, buffer)
 
+    def craft_recipe_request(self, window_id: int, recipe_id: int, make_all: bool) -> Coroutine[Any, Any, None]:
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_byte(window_id))
+        buffer.write(protocol.write_varint(recipe_id))
+        buffer.write(protocol.pack_bool(make_all))
+        return self.write_packet(0x12, buffer)
+
     def entity_action(self, entity_id: int, action_id: int, jump_boost: int) -> Coroutine[Any, Any, None]:
         """Send entity action packet (sneak, sprint, stop sneaking, etc.)."""
         buffer = protocol.ProtocolBuffer()
@@ -236,6 +267,7 @@ class TcpClient:
         buffer.write(protocol.write_varint(action_id))
         buffer.write(protocol.write_varint(jump_boost))
         return self.write_packet(0x15, buffer)
+
 
     def use_entity(self, target_id: int, type_action: int, hitbox: math.Vector3D[float] = None, hand: int = None
                    ) -> Coroutine[Any, Any, None]:

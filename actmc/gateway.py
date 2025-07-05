@@ -71,8 +71,8 @@ class MinecraftSocket:
         client.tcp = await TcpClient.connect(host, port)
         state.tcp = client.tcp
         gateway = cls(client.tcp.reader, state=state)
-        await state.send_initial_packets()
         _logger.info("Socket connection established successfully")
+        await state.send_initial_packets()
         return gateway
 
 
@@ -156,9 +156,8 @@ class MinecraftSocket:
 
     async def _handle_keep_alive(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle server keep-alive packet."""
-        keep_alive_id = protocol.read_long(buffer)
-        await self._state.tcp.write_packet(self.KEEP_ALIVE_SERVERBOUND, protocol.pack_long(keep_alive_id))
-        _logger.debug(f"Responded to keep-alive: {keep_alive_id}")
+        await self._state.tcp.write_packet(self.KEEP_ALIVE_SERVERBOUND, buffer)
+        _logger.debug("Sent keep-alive response")
 
     async def _handle_compression_setup(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle compression setup packet during login."""
