@@ -1,24 +1,24 @@
 from __future__ import annotations
 
 from .gateway import MinecraftSocket
-from typing import Optional, Literal, Any, Callable, TYPE_CHECKING, Dict, Type
-from types import TracebackType
-import asyncio
+from .state import ConnectionState
+from typing import TYPE_CHECKING
 from .utils import setup_logging
-from .tcp import TcpClient
-
+import asyncio
 
 if TYPE_CHECKING:
-    from .chunk import Chunk, Block
+    from typing import Optional, Literal, Any, Callable, Dict, Type
+    from .ui.scoreboard import Scoreboard
     from .math import Vector2D, Vector3D
-    from .user import User
     from .ui.border import WorldBorder
     from .ui.tablist import TabPlayer
-    from .ui.gui import Window
-    from .ui.bossbar import BossBar
-    from .ui.scoreboard import Scoreboard
     from .ui.actionbar import Title
-from .state import ConnectionState
+    from .chunk import Chunk, Block
+    from types import TracebackType
+    from .ui.bossbar import BossBar
+    from .ui.gui import Window
+    from .tcp import TcpClient
+    from .user import User
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -291,34 +291,14 @@ class Client:
         return await self._closing_task
 
     async def __aenter__(self) -> Client:
-        """
-        Asynchronous context manager entry method.
-
-        Returns
-        -------
-        Client
-            The current instance of the client, allowing it to be used within an async context manager.
-        """
+        """Asynchronous context manager entry method."""
         return self
 
     async def __aexit__(self,
                         exc_type: Optional[Type[BaseException]],
                         exc_value: Optional[BaseException],
                         traceback: Optional[TracebackType]) -> None:
-        """
-        Asynchronous context manager exit method.
-
-        Closes the client connection when exiting the async context manager.
-
-        Parameters
-        ----------
-        exc_type: Optional[Type[BaseException]]
-            The type of the exception raised, if any.
-        exc_value: Optional[BaseException]
-            The exception instance, if any.
-        traceback: Optional[TracebackType]
-            The traceback object, if any.
-        """
+        """Asynchronous context manager exit method."""
         if self._closing_task:
             await self._closing_task
         else:
@@ -349,12 +329,11 @@ class Client:
             The server hostname or IP address.
         port: Optional[int]
             The server port number.
-        log_handler: Optional[logging.Handler], default=None
-            A logging handler to be used for logging output. If None, a default handler will be set up.
-        log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]], default=None
-            The logging level to be used (NOTSET=0, DEBUG=10, INFO=20, WARNING=30, ERROR=40, CRITICAL=50).
-            If None, a default level will be used.
-        root_logger: bool, default=False
+        log_handler: Optional[logging.Handler]
+            A logging handler to be used for logging output.
+        log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]]
+            The logging level to be used (NOTSET=0, TRACE=5, DEBUG=10, INFO=20, WARNING=30, ERROR=40, CRITICAL=50).
+        root_logger: bool
             If True, the logging configuration will apply to the root logger. Otherwise, it applies to a new logger.
 
         Notes
@@ -427,7 +406,7 @@ class Client:
             Whether to display right pants overlay.
         hat: bool
             Whether to display hat overlay.
-        main_hand: int, default=1
+        main_hand: int
             Main hand (0=left, 1=right).
         """
         skin_parts = 0
@@ -520,66 +499,23 @@ class Client:
             if coro is not None and asyncio.iscoroutinefunction(coro):
                 _logger.trace('Dispatching event %s', event)  # type: ignore
                 wrapped = self._run_event(coro, method, *args, **kwargs)
-                # Schedule the task
-                self.loop.create_task(wrapped, name=f'twitch:{method}')
+                self.loop.create_task(wrapped, name=f'actmc:{method}')
         except AttributeError:
             pass
         except Exception as error:
             _logger.error('Event: %s Error: %s', event, error)
 
-    def _get_socket(self) -> MinecraftSocket:
-        """
-        Get the current socket connection.
-
-        Returns
-        -------
-        MinecraftSocket
-            The current socket instance.
-        """
-        return self.socket
-
     def _get_state(self, username: str) -> ConnectionState:
-        """
-        Create and return a connection state object.
-
-        Parameters
-        ----------
-        username: str
-            The username for the connection.
-
-        Returns
-        -------
-        ConnectionState
-            A new connection state instance.
-        """
+        """Create and return a connection state object."""
         return ConnectionState(username=username, dispatcher=self.dispatch)
 
     async def _async_loop(self) -> None:
-        """
-        Initialize the asynchronous event loop for managing client operations.
-
-        Notes
-        -----
-        This method sets up the event loop and stores a reference to it.
-        """
+        """Initialize the asynchronous event loop for managing client operations."""
         loop = asyncio.get_running_loop()
         self.loop = loop
 
     async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
-        """
-        Run an event coroutine and handle exceptions.
-
-        Parameters
-        ----------
-        coro: Callable[..., Any]
-            The coroutine function to execute.
-        event_name: str
-            The name of the event being executed.
-        *args: Any
-            Positional arguments to pass to the coroutine.
-        **kwargs: Any
-            Keyword arguments to pass to the coroutine.
-        """
+        """Run an event coroutine and handle exceptions."""
         try:
             await coro(*args, **kwargs)
         except asyncio.CancelledError:
