@@ -65,14 +65,11 @@ class MinecraftSocket:
         data = bytearray()
 
         for _ in range(5):  # MAX_VARINT_LENGTH
-            try:
-                byte = await self._reader.readexactly(1)
-                data.append(byte[0])
+            byte = await self._reader.readexactly(1)
+            data.append(byte[0])
 
-                if not (byte[0] & 0x80):
-                    break
-            except asyncio.IncompleteReadError as e:
-                raise DataTooShortError("Connection closed while reading varint") from e
+            if not (byte[0] & 0x80):
+                break
         else:
             raise ProtocolError("VarInt exceeds maximum length")
 

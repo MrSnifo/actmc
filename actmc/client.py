@@ -269,6 +269,12 @@ class Client:
             If the client fails to connect.
         asyncio.exceptions.IncompleteReadError
             If the connection is interrupted unexpectedly.
+
+        Notes
+        -----
+        By using this, you agree to Minecraft's EULA:
+
+        https://account.mojang.com/documents/minecraft_eula
         """
         while not self.is_closed():
             try:
@@ -345,16 +351,7 @@ class Client:
             log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]] = None,
             root_logger: bool = False) -> None:
         """
-        Start the client and run it until interrupted.
-
-        !!! danger
-            This function must be the last function to call as it blocks
-            the execution of anything after it.
-
-        This method sets up logging, initializes the client, and starts the main
-        asynchronous process. The client will run and handle events until the
-        process is interrupted (e.g., by a KeyboardInterrupt). The logging setup
-        is customizable via parameters.
+        Start the client.
 
         Parameters
         ----------
@@ -367,12 +364,15 @@ class Client:
         log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]]
             The logging level to be used (NOTSET=0, TRACE=5, DEBUG=10, INFO=20, WARNING=30, ERROR=40, CRITICAL=50).
         root_logger: bool
-            If True, the logging configuration will apply to the root logger. Otherwise, it applies to a new logger.
+            If True, the logging configuration applies to the root logger;
+            otherwise, it applies to a new logger.
 
-        Notes
-        -----
-        By using this client, you agree to Minecraft's EULA:
-        https://account.mojang.com/documents/minecraft_eula
+        Warning
+        -------
+        The client does NOT perform automatic SRV record lookups.
+        To connect to domains using SRV records (e.g., Minecraft hosts),
+        you must resolve the port yourself and provide it explicitly.
+        If omitted, the default port 25565 is used.
         """
         if log_handler is None:
             setup_logging(handler=log_handler, level=log_level, root=root_logger)

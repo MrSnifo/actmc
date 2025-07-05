@@ -133,7 +133,7 @@ class TcpClient:
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.write_varint(self.PROTOCOL_VERSION))
         buffer.write(protocol.pack_string(self.host))
-        buffer.write(protocol.pack_short(self.port))
+        buffer.write(protocol.pack_ushort(self.port))
         buffer.write(protocol.write_varint(next_state))
         return self.write_packet(0x00, buffer)
 
