@@ -60,8 +60,8 @@ class ConnectionState:
     # Class-level packet parser cache for performance
     _packet_parsers: Dict[int, str] = {}
 
-    def __init__(self, tcp: TcpClient, dispatcher: Callable[..., Any]) -> None:
-        self.tcp = tcp
+    def __init__(self, username: str, dispatcher: Callable[..., Any]) -> None:
+        self.tcp: Optional[TcpClient] = None
         self._dispatch = dispatcher
         self._load_chunks = True
 
@@ -69,7 +69,7 @@ class ConnectionState:
         self._waiters: Dict[str, List[asyncio.Future]] = {}
 
         # Player state
-        self.username: Optional[str] = None
+        self.username: Optional[str] = username
         self.uid: Optional[str] = None
         self.user: Optional[User] = None
 
@@ -109,28 +109,11 @@ class ConnectionState:
 
     # ============================== Network Operations ==============================
 
-    async def send_packet(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
-        """
-        Send a packet to the server.
+    async def send_initial_packets(self) -> None:
+        await self.tcp.handshake_packet()
 
-        Args:
-            packet_id: Minecraft protocol packet ID
-            buffer: Packet data payload
-
-        Raises:
-            RuntimeError: If socket is not available or not connected
-        """
-        socket = self._get_socket()
-        if not socket:
-            raise RuntimeError("Socket is not initialized or not connected")
-
-        await socket.write_packet(packet_id=packet_id, data=buffer.getvalue())
-
-    async def send_initial_packets(self, username: str) -> None:
-        await self.send_packet(0x00, self.tcp.handshake_packet)
-
-        login_packet = self.tcp.login_packet(username)
-        await self.send_packet(0x00, login_packet)
+        login_packet = self.tcp.login_packet(self.username)
+        await login_packet
 
         # Performance warning for chunk loading
         if self._load_chunks:
@@ -281,141 +264,6 @@ class ConnectionState:
                 _logger.warning(f"Unknown object entity: %s, Type: '%s', With data: %s", entity_id,
                                 object_type, data)
             return mob_entity
-
-    # ============================== Client Actions ==============================
-    async def send_client_status(self, action_id: int) -> None:
-        buffer = self.tcp.client_status(action_id)
-        await self.send_packet(0x03, buffer)
-
-    async def send_player_teleport_confirmation(self, teleport_id: int) -> None:
-        buffer = self.tcp.player_teleport_confirmation(teleport_id)
-        await self.send_packet(0x00, buffer)
-
-    async def send_player_ground(self, on_ground: bool) -> None:
-        buffer = self.tcp.player_ground(on_ground)
-        await self.send_packet(0x0C, buffer)
-
-    async def send_player_position(self, position: math.Vector3D[float], on_ground: bool) -> None:
-        buffer = self.tcp.player_position(position, on_ground)
-        await self.send_packet(0x0D, buffer)
-
-    async def send_player_look(self, rotation: math.Rotation, on_ground: bool) -> None:
-        buffer = self.tcp.player_look(rotation, on_ground)
-        await self.send_packet(0x0F, buffer)
-
-    async def send_player_position_and_look(self, position: math.Vector3D[float], rotation: math.Rotation,
-                                      on_ground: bool) -> None:
-        buffer = self.tcp.player_position_and_look_packet(position, rotation, on_ground)
-        await self.send_packet(0x0E, buffer)
-
-    async def send_use_item(self, hand: int) -> None:
-        buffer = self.tcp.use_item(hand)
-        await self.send_packet(0x20, buffer)
-
-    async def send_swing_arm(self, hand: int) -> None:
-        buffer = self.tcp.swing_arm(hand)
-        await self.send_packet(0x1D, buffer)
-
-    async def send_player_digging(self, status: int, position: math.Vector3D[int], face: int) -> None:
-        buffer = self.tcp.player_digging(status, position, face)
-        await self.send_packet(0x14, buffer)
-
-    async def send_player_block_placement(self, position: math.Vector3D[int], face: int, hand: int,
-                                          cursor: math.Vector3D[float]) -> None:
-        buffer = self.tcp.player_block_placement(position, face, hand, cursor)
-        await self.send_packet(0x1F, buffer)
-
-    async def send_update_sign(self, position: math.Vector3D[int], line1: str, line2: str, line3: str,
-                               line4: str) -> None:
-        buffer = self.tcp.update_sign(position, line1, line2, line3, line4)
-        await self.send_packet(0x1C, buffer)
-
-    async def send_confirm_window_transaction(self, window_id: int, action_number: int, accepted: bool) -> None:
-        buffer = self.tcp.confirm_window_transaction(window_id, action_number, accepted)
-        await self.send_packet(0x05, buffer)
-
-    async def send_entity_action(self, entity_id: int, action_id: int, jump_boost: int = 0) -> None:
-        buffer = self.tcp.entity_action(entity_id, action_id, jump_boost)
-        await self.send_packet(0x15, buffer)
-
-    async def send_use_entity_interact(self, target_id: int, hand: int) -> None:
-        buffer = self.tcp.use_entity_interact(target_id, hand)
-        await self.send_packet(0x0A, buffer)
-
-    async def send_use_entity_attack(self, target_id: int) -> None:
-        buffer = self.tcp.use_entity_attack(target_id)
-        await self.send_packet(0x0A, buffer)
-
-    async def send_use_entity_interact_at(self, target_id: int, hitbox: math.Vector3D[float], hand: int) -> None:
-        buffer = self.tcp.use_entity_interact_at(target_id, hitbox, hand)
-        await self.send_packet(0x0A, buffer)
-
-    async def send_held_item_change(self, slot: int) -> None:
-        buffer = self.tcp.held_item_change(slot)
-        await self.send_packet(0x15, buffer)
-
-    async def send_creative_inventory_action(self, slot: int, clicked_item: Optional[entities.misc.Item]) -> None:
-        item_data = clicked_item.to_dict() if clicked_item else None
-        buffer = self.tcp.creative_inventory_action(slot, item_data)
-        await self.send_packet(0x1B, buffer)
-
-    async def send_creative_set_slot(self, slot: int, item: entities.misc.Item) -> None:
-        item_data = item.to_dict()
-        buffer = self.tcp.creative_inventory_action(slot, item_data)
-        await self.send_packet(0x1B, buffer)
-
-    async def send_creative_clear_slot(self, slot: int) -> None:
-        buffer = self.tcp.creative_inventory_action(slot, None)
-        await self.send_packet(0x1B, buffer)
-
-    async def send_creative_drop_item(self, item: entities.misc.Item) -> None:
-        item_data = item.to_dict()
-        buffer = self.tcp.creative_inventory_action(-1, item_data)
-        await self.send_packet(0x1B, buffer)
-
-    async def send_creative_give_item(self, item: entities.misc.Item, slot: int) -> None:
-        item_data = item.to_dict()
-        buffer = self.tcp.creative_inventory_action(slot, item_data)
-        await self.send_packet(0x1B, buffer)
-
-    async def send_creative_pickup_item(self, slot: int) -> None:
-        """
-        Pick up (delete) an item from a creative inventory slot.
-
-        In creative mode, "picking up" an item actually deletes it from the server.
-
-        Args:
-            slot: Inventory slot number to pick up from
-        """
-        buffer = self.tcp.creative_inventory_action(slot, None)
-        await self.send_packet(0x1B, buffer)
-
-    async def send_open_advancement_tab(self, tab_option: int) -> None:
-        advancement_tabs = {
-            0: 'minecraft:story/root',
-            1: 'minecraft:adventure/root',
-            2: 'minecraft:nether/root',
-            3: 'minecraft:end/root',
-            4: 'minecraft:husbandry/root',
-        }
-        buffer = self.tcp.advancement_tab(action=0, tab_id=advancement_tabs[tab_option])
-        await self.send_packet(0x19, buffer)
-
-    async def send_close_advancement_screen(self) -> None:
-        buffer = self.tcp.advancement_tab(action=1)
-        await self.send_packet(0x19, buffer)
-
-    async def send_resource_pack_status(self, result: int) -> None:
-        buffer = self.tcp.resource_pack_status(result)
-        await self.send_packet(0x18, buffer)
-
-    async def send_client_settings(self, locale: str, view_distance: int, chat_mode: int, chat_colors: bool,
-                                   skin_parts: list[str], main_hand: int) -> None:
-        skin_parts_mapping = {'cape': 0x01, 'jacket': 0x02, 'left_sleeve': 0x04, 'right_sleeve': 0x08,
-                              'left_pants_leg': 0x10, 'right_pants_leg': 0x20, 'hat': 0x40,}
-        skin_parts_mask = sum(skin_parts_mapping.get(part.lower(), 0) for part in skin_parts)
-        buffer = self.tcp.client_settings(locale, view_distance, chat_mode, chat_colors, skin_parts_mask, main_hand)
-        await self.send_packet(0x04, buffer)
 
     async def parse(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
         try:
@@ -766,7 +614,7 @@ class ConnectionState:
         self.user.position = math.Vector3D(x, y, z)
         self.user.rotation = math.Rotation(yaw, pitch)
 
-        await self.send_player_teleport_confirmation(teleport_id)
+        await self.tcp.player_teleport_confirmation(teleport_id)
         self._dispatch('player_position_and_look', self.user.position, self.user.rotation)
 
     async def parse_0x22(self, data: protocol.ProtocolBuffer) -> None:
@@ -1453,7 +1301,7 @@ class ConnectionState:
         window_id = protocol.read_byte(buffer)
         action_number = protocol.read_short(buffer)
         accepted = protocol.read_bool(buffer)
-        await self.send_confirm_window_transaction(window_id, action_number, accepted)
+        await self.tcp.confirm_window_transaction(window_id, action_number, accepted)
         self._dispatch('transaction_confirmed', window_id, action_number, accepted)
 
     async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:

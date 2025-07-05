@@ -25,166 +25,166 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from .tcp import TcpClient
 from . import protocol
 import asyncio
 import zlib
 
 if TYPE_CHECKING:
-    from typing import Self, ClassVar, Tuple
+    from typing import Self, ClassVar, Tuple, Optional
     from .state import ConnectionState
-    from .client import Client
+    from . import Client
 
 import logging
 _logger = logging.getLogger(__name__)
 
 
 class MinecraftSocket:
-    """Minecraft protocol socket implementation."""
+    """Minecraft protocol socket implementation with packet handling."""
 
+    # Protocol phases
+    PHASE_HANDSHAKE: ClassVar[int] = 0
+    PHASE_STATUS: ClassVar[int] = 1
+    PHASE_LOGIN: ClassVar[int] = 2
+    PHASE_COMPRESSION_SETUP: ClassVar[int] = 4
+    PHASE_PLAY: ClassVar[int] = 6
+
+    # Packet IDs
     KEEP_ALIVE_SERVERBOUND: ClassVar[int] = 0x0B
     KEEP_ALIVE_CLIENTBOUND: ClassVar[int] = 0x1F
     SET_COMPRESSION: ClassVar[int] = 0x03
     LOGIN_SUCCESS: ClassVar[int] = 0x02
 
-    __slots__ = ('reader', 'writer', 'compression_threshold', 'phase', '_state')
+    # Maximum VarInt length in bytes
+    MAX_VARINT_LENGTH: ClassVar[int] = 5
 
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, state: ConnectionState) -> None:
-        self.reader: asyncio.StreamReader = reader
-        self.writer: asyncio.StreamWriter = writer
+    __slots__ = ('_reader', '_state', 'phase')
 
-        self.compression_threshold: int = -1
-        self.phase: int = 0
-
+    def __init__(self, reader: asyncio.StreamReader, state: ConnectionState) -> None:
+        self._reader: asyncio.StreamReader = reader
         self._state: ConnectionState = state
+        self.phase: int = self.PHASE_HANDSHAKE
 
     @classmethod
-    async def initialize_socket(cls, client: Client, state: ConnectionState) -> Self:
-        """Factory method to create and initialize a socket connection. """
-        connection = await client.tcp.connect()
-        gateway = cls(*connection, state=state)
-
+    async def initialize_socket(cls, client: Client, host: str, port: Optional[int], state: ConnectionState) -> Self:
+        """Factory method to create and initialize a socket connection."""
+        client.tcp = await TcpClient.connect(host, port)
+        state.tcp = client.tcp
+        gateway = cls(client.tcp.reader, state=state)
+        await state.send_initial_packets()
         _logger.info("Socket connection established successfully")
         return gateway
+
 
     async def _read_varint_async(self) -> int:
         """Asynchronously read a variable-length integer from the stream."""
         data = bytearray()
 
-        for _ in range(5):
-            byte = await self.reader.readexactly(1)
-            data.append(byte[0])
+        for _ in range(self.MAX_VARINT_LENGTH):
+            try:
+                byte = await self._reader.readexactly(1)
+                data.append(byte[0])
 
-            # Check if this is the last byte (MSB not set)
-            if not (byte[0] & 0x80):
-                break
+                if not (byte[0] & 0x80):
+                    break
+            except asyncio.IncompleteReadError as e:
+                raise ConnectionError("Connection closed while reading varint") from e
         else:
             raise ValueError("VarInt exceeds maximum length")
 
         buffer = protocol.ProtocolBuffer(data)
         return protocol.read_varint(buffer)
 
-    @staticmethod
-    def _varint_size(value: int) -> int:
-        """Calculate the byte size required for a VarInt encoding."""
-        if value == 0:
-            return 1
+    def _decompress_payload(self, payload: bytes) -> bytes:
+        """Decompress packet payload if compression is enabled."""
+        if self._state.tcp.compression_threshold < 0:
+            return payload
 
-        size = 0
-        while value:
-            size += 1
-            value >>= 7
+        buffer = protocol.ProtocolBuffer(payload)
+        uncompressed_length = protocol.read_varint(buffer)
 
-        return size
+        if uncompressed_length > 0:
+            compressed_data = buffer.read(buffer.remaining())
+            try:
+                decompressed_data = zlib.decompress(compressed_data)
+            except zlib.error as e:
+                raise ValueError(f"Packet decompression failed: {e}") from e
+
+            if len(decompressed_data) != uncompressed_length:
+                raise ValueError(
+                    f"Decompressed packet length mismatch: "
+                    f"expected {uncompressed_length}, got {len(decompressed_data)}"
+                )
+            return decompressed_data
+        else:
+            return buffer.read(buffer.remaining())
 
     async def read_packet(self) -> Tuple[int, bytes]:
         """Read and parse a complete Minecraft protocol packet."""
-        packet_length = await self._read_varint_async()
-        body = await self.reader.readexactly(packet_length)
-        buffer = protocol.ProtocolBuffer(body)
+        try:
+            packet_length = await self._read_varint_async()
+            body = await self._reader.readexactly(packet_length)
+        except asyncio.IncompleteReadError as e:
+            raise ConnectionError("Connection closed while reading packet") from e
 
-        if self.compression_threshold >= 0:
-            uncompressed_length = protocol.read_varint(buffer)
-            if uncompressed_length > 0:
-                compressed_data = buffer.read(buffer.remaining())
-                try:
-                    body = zlib.decompress(compressed_data)
-                except zlib.error as e:
-                    raise ValueError(f"Packet decompression failed: {e}") from e
-                if len(body) != uncompressed_length:
-                    raise ValueError(
-                        f"Decompressed packet length mismatch: "
-                        f"expected {uncompressed_length}, got {len(body)}"
-                    )
-                buffer = protocol.ProtocolBuffer(body)
+        body = self._decompress_payload(body)
+        buffer = protocol.ProtocolBuffer(body)
         packet_id = protocol.read_varint(buffer)
         data = buffer.read(buffer.remaining())
-
         return packet_id, data
-
-    async def write_packet(self, packet_id: int, data: bytes) -> None:
-        """Write a complete Minecraft protocol packet."""
-        packet_id_bytes = protocol.write_varint(packet_id)
-        payload = packet_id_bytes + data
-        payload_length = len(payload)
-
-        body_buffer = protocol.ProtocolBuffer()
-        if self.compression_threshold >= 0:
-            if payload_length >= self.compression_threshold:
-                compressed_data = zlib.compress(payload)
-                body_buffer.write(protocol.write_varint(payload_length))
-                body_buffer.write(compressed_data)
-            else:
-                body_buffer.write(protocol.write_varint(0))
-                body_buffer.write(payload)
-        else:
-            body_buffer.write(payload)
-
-        body = body_buffer.getvalue()
-        self.writer.write(protocol.write_varint(len(body)))
-        self.writer.write(body)
-        await self.writer.drain()
-        _logger.debug("Sent packet 0x%s", f"{packet_id:02X}")
 
     async def poll(self) -> None:
         """Poll for and handle incoming packets."""
         packet_id, data = await self.read_packet()
         buffer = protocol.ProtocolBuffer(data)
+        _logger.trace(f"Processing packet ID 0x{packet_id:02X}") # type: ignore
 
-        _logger.trace(f"Processing packet ID 0x{packet_id:02X}")  # type: ignore
-
-        # Handle keep-alive packets
         if packet_id == self.KEEP_ALIVE_CLIENTBOUND:
-            await self._keep_alive(buffer)
+            await self._handle_keep_alive(buffer)
             return
 
-        # PLAY STATE: 6.
-        if self.phase != 6:
+        if self.phase != self.PHASE_PLAY:
             if packet_id == self.SET_COMPRESSION:
-                await self._compression_setup(buffer)
+                await self._handle_compression_setup(buffer)
                 return
 
             if packet_id == self.LOGIN_SUCCESS:
-                await self._login_success(buffer)
+                await self._handle_login_success(buffer)
                 return
 
         await self._state.parse(packet_id, buffer)
 
-    async def _keep_alive(self, buffer: protocol.ProtocolBuffer) -> None:
+    async def _handle_keep_alive(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle server keep-alive packet."""
         keep_alive_id = protocol.read_long(buffer)
-        await self.write_packet(self.KEEP_ALIVE_SERVERBOUND, protocol.pack_long(keep_alive_id))
-        _logger.debug(f"Responded to keep-alive: %s", keep_alive_id)
+        await self._state.tcp.write_packet(self.KEEP_ALIVE_SERVERBOUND, protocol.pack_long(keep_alive_id))
+        _logger.debug(f"Responded to keep-alive: {keep_alive_id}")
 
-    async def _compression_setup(self, buffer: protocol.ProtocolBuffer) -> None:
+    async def _handle_compression_setup(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle compression setup packet during login."""
         threshold = protocol.read_varint(buffer)
-        self.compression_threshold = threshold
-        self.phase = 4
-        _logger.info(f"Packet compression enabled with threshold %s", threshold)
+        self._state.tcp.compression_threshold = threshold
+        self.phase = self.PHASE_COMPRESSION_SETUP
+        _logger.info(f"Packet compression enabled with threshold {threshold}")
 
-    async def _login_success(self, buffer: protocol.ProtocolBuffer) -> None:
+    async def _handle_login_success(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle successful login completion."""
         self._state.uid = protocol.read_string(buffer)
         self._state.username = protocol.read_string(buffer)
-        self.phase = 6
-        _logger.debug(f"Login successful for player %s (UUID: %s)", self._state.username, self._state.uid)
+        self.phase = self.PHASE_PLAY
+        _logger.info(f"Login successful for player {self._state.username} (UUID: {self._state.uid})")
+
+    async def close(self) -> None:
+        """Close the socket connection gracefully."""
+        if self._state.tcp:
+            await self._state.tcp.close()
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if the socket is connected."""
+        return self._state.tcp and not self._state.tcp.is_closed
+
+    @property
+    def is_in_play_phase(self) -> bool:
+        """Check if in play phase."""
+        return self.phase == self.PHASE_PLAY

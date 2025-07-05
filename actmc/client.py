@@ -17,16 +17,16 @@ import logging
 _logger = logging.getLogger(__name__)
 
 class Client:
-    def __init__(self, host: str, port: Optional[int] = 25565):
+    def __init__(self, username: str):
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
-        self.tcp: TcpClient = TcpClient(host=host, port=port)
-        self._connection: ConnectionState = self._get_state()
+        self.tcp: Optional[TcpClient] = None
+        self._connection: ConnectionState = self._get_state(username)
         self._closing_task: Optional[asyncio.Task] = None
         self._closed = False
-        self._connection._get_socket = self._get_socket
 
     # -------------------+ Player +-------------------
+
     @property
     def user(self) -> Optional[User]:
         return self._connection.user
@@ -66,19 +66,18 @@ class Client:
     def _get_socket(self) -> MinecraftSocket:
         return self.socket
 
-    def _get_state(self) -> ConnectionState:
-        return ConnectionState(tcp=self.tcp, dispatcher=self.dispatch)
+    def _get_state(self, username: str) -> ConnectionState:
+        return ConnectionState(username=username, dispatcher=self.dispatch)
 
     def is_closed(self):
         return self._closed
 
-    async def connect(self, username: str) -> None:
+    async def connect(self, host: str, port: Optional[int]) -> None:
         try:
             while not self.is_closed():
-                socket = MinecraftSocket.initialize_socket(client=self, state=self._connection)
+                socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
                 self.socket = await asyncio.wait_for(socket, timeout=60.0)
                 self.dispatch('connect')
-                await self._connection.send_initial_packets(username)
                 while True:
                     await self.socket.poll()
 
@@ -160,17 +159,17 @@ class Client:
         loop = asyncio.get_running_loop()
         self.loop = loop
 
-    async def start(self, username: str):
+    async def start(self, host: str, port: Optional[int]):
         if self.loop is None:
             await self._async_loop()
-        await self.connect(username)
+        await self.connect(host, port)
 
     @staticmethod
     async def handle_packet(data: bytes):
         print(f"[Client] Received packet: {data.hex()}")
 
     def run(self,
-            username: str,
+            host: str, port: Optional[int] = 25565,
             log_handler: Optional[logging.Handler] = None,
             log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]] = None,
             root_logger: bool = False) -> None:
@@ -180,7 +179,7 @@ class Client:
         # https://account.mojang.com/documents/minecraft_eula README
 
         async def runner() -> None:
-            await self.start(username)
+            await self.start(host, port)
 
         try:
             asyncio.run(runner())
