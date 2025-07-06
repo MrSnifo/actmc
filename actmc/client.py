@@ -288,15 +288,21 @@ class Client:
                 self.dispatch('connect')
                 while True:
                     await self.socket.poll()
-            except asyncio.exceptions.IncompleteReadError as exc:
-                raise ConnectionClosed("Connection interrupted unexpectedly") from exc
-            except asyncio.TimeoutError as exc:
-                raise ClientException(f"Connection timeout to {host}:{port}") from exc
-            except OSError as exc:
-                if hasattr(exc, 'winerror') and exc.winerror == 121:
-                    raise ClientException(f"Network timeout connecting to {host}:{port}") from exc
-                else:
-                    raise ClientException(f"Failed to connect to {host}:{port}") from exc
+            except (ConnectionClosed, asyncio.exceptions.IncompleteReadError, asyncio.TimeoutError, OSError) as exc:
+                self.dispatch('disconnect')
+                if self.is_closed():
+                    return
+                if isinstance(exc, ConnectionClosed):
+                    raise
+                elif isinstance(exc, asyncio.exceptions.IncompleteReadError):
+                    raise ConnectionClosed("Connection interrupted unexpectedly") from exc
+                elif isinstance(exc, asyncio.TimeoutError):
+                    raise ClientException(f"Connection timeout to {host}:{port}") from None
+                elif isinstance(exc, OSError):
+                    if hasattr(exc, 'winerror') and exc.winerror == 121:
+                        raise ClientException(f"Network timeout connecting to {host}:{port}") from None
+                    else:
+                        raise ClientException(f"Failed to connect to {host}:{port}") from None
 
     async def start(self, host: str, port: int) -> None:
         """
