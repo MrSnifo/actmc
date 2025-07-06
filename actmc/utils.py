@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 import logging
 
-__all__ = ('position_to_chunk_relative', 'setup_logging')
+__all__ = ('position_to_chunk_relative', 'calculate_block_face', 'setup_logging')
 
 def position_to_chunk_relative(position: math.Vector3D[int]) -> Tuple[math.Vector2D[int], math.Vector3D[int], int]:
     """
@@ -65,8 +65,53 @@ def position_to_chunk_relative(position: math.Vector3D[int]) -> Tuple[math.Vecto
         section_y
     )
 
+
+def calculate_block_face(player: math.Vector3D[float], block: math.Vector3D[int]) -> int:
+    """
+    Calculate which face of a block the player is most likely targeting.
+
+    Parameters
+    ----------
+    player: Vector3D[float]
+        Player's current position (usually eye level).
+    block: Vector3D[int]
+        Block position (x, y, z).
+
+    Returns
+    -------
+    int
+        Face being targeted:
+        - 0: down
+        - 1: up
+        - 2: north
+        - 3: south
+        - 4: west
+        - 5: east
+    """
+
+    center_x = block.x + 0.5
+    center_y = block.y + 0.5
+    center_z = block.z + 0.5
+
+    dx = player.x - center_x
+    dy = player.y - center_y
+    dz = player.z - center_z
+
+
+    abs_dx = abs(dx)
+    abs_dy = abs(dy)
+    abs_dz = abs(dz)
+
+    if abs_dx >= abs_dy and abs_dx >= abs_dz:
+        return 4 if dx > 0 else 5
+    elif abs_dy >= abs_dx and abs_dy >= abs_dz:
+        return 1 if dy > 0 else 0
+    else:
+        return 2 if dz < 0 else 3
+
+
 LOGGER_TRACE: int = 5
-logging.addLevelName(LOGGER_TRACE, "TRACE")
+logging.addLevelName(LOGGER_TRACE, 'TRACE')
 
 def trace(self, message, *args, **kwargs):
     if self.isEnabledFor(LOGGER_TRACE):

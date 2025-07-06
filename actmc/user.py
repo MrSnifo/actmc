@@ -418,36 +418,30 @@ class User(Player):
 
         Parameters
         ----------
-        position : Vector3D[int]
+        position: Vector3D[int]
             The position of the block to interact with.
-        face : int
-            The face of the block being targeted:
-            - 0: down (bottom face)
-            - 1: up (top face)
-            - 2: north
-            - 3: south
-            - 4: west
-            - 5: east
-        hand : Literal[0, 1], default 0
+        face: int
+            The face of the block being targeted.
+        hand: Literal[0, 1]
             Hand to use for the interaction:
             - 0: main hand
-            - 1: off hand
-        cursor : Vector3D[float], optional
+            - 1: off-hand
+        cursor: Vector3D[float], optional
             The cursor position on the targeted face, with coordinates from 0.0 to 1.0.
             If not provided, defaults to center of the face (0.5, 0.5, 0.5).
 
-        Returns
-        -------
-        None
-
         Notes
         -----
-        The actual behavior depends on the item in the specified hand and the block
-        being interacted with. Examples include:
-        - Block placement when holding a block
-        - Opening chests, furnaces, or other containers
-        - Activating buttons, levers, or redstone components
-        - Using tools on appropriate blocks
+        Behavior depends on your held item and the block. Examples:
+        - Placing blocks
+
+        - Opening containers (chests, furnaces)
+
+        - Activating buttons, levers, redstone
+
+        - Using tools on blocks
+
+        Ensure you have permission to interact with blocks or open containers.
         """
         if cursor is None:
             cursor = Vector3D(0.5, 0.5, 0.5)
