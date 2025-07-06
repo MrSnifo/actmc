@@ -207,6 +207,14 @@ class TcpClient:
         buffer.write(protocol.pack_bool(left_paddle_turning))
         return self.write_packet(0x11, buffer)
 
+    def steer_vehicle(self, sideways: float, forward: float, flags: int) -> Coroutine[Any, Any, None]:
+        """Send steer vehicle packet to control vehicle movement."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_float(sideways))
+        buffer.write(protocol.pack_float(forward))
+        buffer.write(protocol.pack_ubyte(flags))
+        return self.write_packet(0x16, buffer)
+
     def player_abilities(self, flags: int, flying_speed: float, walking_speed: float) -> Coroutine[Any, Any, None]:
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.pack_byte(flags))
@@ -222,7 +230,7 @@ class TcpClient:
         """Change selected hotbar slot."""
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.pack_short(slot))
-        return self.write_packet(0x15, buffer)
+        return self.write_packet(0x1A, buffer)
 
     def swing_arm(self, hand: int) -> Coroutine[Any, Any, None]:
         """Send arm swing animation packet."""
@@ -263,6 +271,21 @@ class TcpClient:
         buffer.write(protocol.write_varint(recipe_id))
         buffer.write(protocol.pack_bool(make_all))
         return self.write_packet(0x12, buffer)
+
+    def crafting_book_data_displayed_recipe(self, recipe_id: int) -> Coroutine[Any, Any, None]:
+        """Send crafting book data packet for displayed recipe."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(0))  # Type 0: Displayed Recipe
+        buffer.write(protocol.pack_int(recipe_id))
+        return self.write_packet(0x17, buffer)
+
+    def crafting_book_data_status(self, crafting_book_open: bool, crafting_filter: bool) -> Coroutine[Any, Any, None]:
+        """Send crafting book data packet for status."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.write_varint(1))  # Type 1: Crafting Book Status
+        buffer.write(protocol.pack_bool(crafting_book_open))
+        buffer.write(protocol.pack_bool(crafting_filter))
+        return self.write_packet(0x17, buffer)
 
     def entity_action(self, entity_id: int, action_id: int, jump_boost: int) -> Coroutine[Any, Any, None]:
         """Send entity action packet (sneak, sprint, stop sneaking, etc.)."""
@@ -356,3 +379,59 @@ class TcpClient:
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.pack_string(message))
         return self.write_packet(0x02, buffer)
+
+    def chat_command_suggestion(self, text: str, assume_command: bool, has_position: bool,
+                                looked_at_block: Optional[math.Vector3D[int]]) -> Coroutine[Any, Any, None]:
+        """Send tab-complete request for command or chat suggestions."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_string(text))
+        buffer.write(protocol.pack_bool(assume_command))
+        buffer.write(protocol.pack_bool(has_position))
+        if has_position and looked_at_block is not None:
+            buffer.write(protocol.pack_position(looked_at_block.x, looked_at_block.y, looked_at_block.z))
+        return self.write_packet(0x01, buffer)
+
+    def enchant_item(self, window_id: int, enchantment: int) -> Coroutine[Any, Any, None]:
+        """Send enchant item packet to apply enchantment from enchantment table."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_byte(window_id))
+        buffer.write(protocol.pack_byte(enchantment))
+        return self.write_packet(0x06, buffer)
+
+    def click_window(self, window_id: int, slot: int, button: int, action_number: int,
+                     mode: int, clicked_item: Optional[misc.ItemData] = None) -> Coroutine[Any, Any, None]:
+        """Send click window packet when player clicks on a slot in a window."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_ubyte(window_id))
+        buffer.write(protocol.pack_short(slot))
+        buffer.write(protocol.pack_byte(button))
+        buffer.write(protocol.pack_short(action_number))
+        buffer.write(protocol.write_varint(mode))
+
+        if clicked_item is None:
+            # Empty slot - set item ID to -1
+            buffer.write(protocol.pack_short(-1))
+        else:
+            # Set item with all properties
+            buffer.write(protocol.pack_short(clicked_item['item_id']))
+            buffer.write(protocol.pack_byte(clicked_item['item_count']))
+            buffer.write(protocol.pack_short(clicked_item['item_damage']))
+            if clicked_item.get('nbt') is None:
+                buffer.write(protocol.pack_byte(0))
+            else:
+                nbt_data = protocol.pack_nbt(clicked_item['nbt'])
+                buffer.write(nbt_data)
+
+        return self.write_packet(0x07, buffer)
+
+    def close_window(self, window_id: int) -> Coroutine[Any, Any, None]:
+        """Send close window packet to server."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_byte(window_id))
+        return self.write_packet(0x08, buffer)
+
+    def spectate(self, target_uuid: str) -> Coroutine[Any, Any, None]:
+        """Send spectate packet."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_uuid(target_uuid))
+        return self.write_packet(0x1E, buffer)

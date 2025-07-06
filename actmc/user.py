@@ -1,16 +1,41 @@
+"""
+The MIT License (MIT)
+
+Copyright (c) 2025-present Snifo
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+"""
+
 from __future__ import annotations
 
-from .entities.entity import BaseEntity
-from .entities.player import Player
-from .entities import misc
 from typing import TYPE_CHECKING, overload
+from .entities.entity import BaseEntity
 from .math import Vector3D, Rotation
+from .entities.player import Player
+from .window import UserWindow
 
 if TYPE_CHECKING:
     from typing import Literal, Dict, ClassVar, Optional
     from .state import ConnectionState
     from .ui import gui
 
+__slots__ = ('User',)
 
 class User(Player):
     """Enhanced Minecraft Player class with utility methods
@@ -18,7 +43,7 @@ class User(Player):
     Note: use hasattr to make sure that data....
 
     """
-    __slots__ = ('_state', 'username', 'gamemode', 'dimension',
+    __slots__ = ('_state', '_window', 'username', 'gamemode', 'dimension',
                  'health', 'food', 'food_saturation',
                  'level', 'total_experience', 'experience_bar',
                  'held_slot',
@@ -71,6 +96,7 @@ class User(Player):
         super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {},
                          state.tablist)
         self._state: ConnectionState = state
+        self._window: Optional[UserWindow] = None
         self._update(username, uuid)
 
     def _update(self, username: str, uuid: str) -> None:
@@ -78,12 +104,20 @@ class User(Player):
         self.uuid = uuid
 
     @property
+    def window(self) -> UserWindow:
+        """Get the window manager for this user"""
+        if self._window is None:
+            self._window = UserWindow(self._state)
+        return self._window
+
+    @property
     def inventory(self) -> Optional[gui.Window]:
+        """Get the player's inventory window"""
         return self._state.windows.get(0)
 
     async def translate(self,
                         position: Optional[Vector3D[float]] = None,
-                        rotation: Optional[Rotation]  = None,
+                        rotation: Optional[Rotation] = None,
                         on_ground: bool = True) -> None:
         """
         Update the player's position and/or rotation.
@@ -205,7 +239,7 @@ class User(Player):
         hand: Literal[0, 1]
             Hand used to interact (0 = main hand, 1 = off-hand).
         """
-        await self._state.tcp.use_entity(entity.id,2, hitbox=hitbox, hand=hand)
+        await self._state.tcp.use_entity(entity.id, 2, hitbox=hitbox, hand=hand)
 
     async def swing_arm(self, hand: Literal[0, 1] = 0) -> None:
         """
@@ -236,6 +270,25 @@ class User(Player):
             Hand to use the item with (0 = main hand, 1 = off hand).
         """
         await self._state.tcp.use_item(hand)
+
+    async def spectate_entity(self, target_uuid: str) -> None:
+        """
+        Teleport to and spectate an entity.
+
+        This sends a Spectate packet to the server to teleport the player to the
+        specified entity. The player must be in spectator mode for this to work.
+        The entity can be in any dimension - if necessary, the player will be
+        respawned in the correct world.
+
+        Parameters
+        ----------
+        target_uuid: str
+            The UUID of the entity to teleport to and spectate. While commonly
+            used for players, this can be any entity UUID. The packet will be
+            ignored if the entity cannot be found, isn't loaded, or if the player
+            attempts to teleport to themselves.
+        """
+        await self._state.tcp.spectate(target_uuid)
 
     async def release_item_use(self) -> None:
         """
@@ -302,7 +355,6 @@ class User(Player):
         """
         await self._state.tcp.player_digging(4, Vector3D(0, 0, 0), 0)
 
-
     async def swap_item_in_hand(self) -> None:
         """
         Swap item to the second hand.
@@ -339,7 +391,6 @@ class User(Player):
 
         flying_speed = getattr(self, 'flying_speed', 0.05)
         walking_speed = 0.1  # Default walking speed
-
         await self._state.tcp.player_abilities(flags, flying_speed, walking_speed)
 
     async def change_held_slot(self, slot: int) -> None:
@@ -357,21 +408,46 @@ class User(Player):
         self.held_slot = slot
         await self._state.tcp.held_item_change(slot)
 
-    async def place_block(self, position: Vector3D[int], face: int, hand: Literal[0, 1] = 0,
+    async def interact_with_block(self, position: Vector3D[int], face: int, hand: Literal[0, 1] = 0,
                           cursor: Vector3D[float] = None) -> None:
         """
-        Place a block at the specified position.
+        Interact with a block (right-click action).
+
+        This function handles all types of block interactions including placing blocks,
+        opening containers, activating mechanisms, using doors, and other right-click actions.
 
         Parameters
         ----------
-        position: Vector3D[int]
-            The position to place the block at.
-        face: int
-            The face of the block being targeted (0=down, 1=up, 2=north, 3=south, 4=west, 5=east).
-        hand: Literal[0, 1]
-            Hand to use for placement (0 = main hand, 1 = off hand).
-        cursor: Vector3D[float]
-            The cursor position on the face (defaults to center if not provided).
+        position : Vector3D[int]
+            The position of the block to interact with.
+        face : int
+            The face of the block being targeted:
+            - 0: down (bottom face)
+            - 1: up (top face)
+            - 2: north
+            - 3: south
+            - 4: west
+            - 5: east
+        hand : Literal[0, 1], default 0
+            Hand to use for the interaction:
+            - 0: main hand
+            - 1: off hand
+        cursor : Vector3D[float], optional
+            The cursor position on the targeted face, with coordinates from 0.0 to 1.0.
+            If not provided, defaults to center of the face (0.5, 0.5, 0.5).
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The actual behavior depends on the item in the specified hand and the block
+        being interacted with. Examples include:
+        - Block placement when holding a block
+        - Opening chests, furnaces, or other containers
+        - Activating buttons, levers, or redstone components
+        - Using tools on appropriate blocks
         """
         if cursor is None:
             cursor = Vector3D(0.5, 0.5, 0.5)
@@ -426,85 +502,17 @@ class User(Player):
         """
         await self._state.tcp.steer_boat(right_paddle, left_paddle)
 
-    async def set_creative_item(self, slot: int, item: misc.Item) -> None:
+    async def steer_vehicle(self, sideways: float, forward: float, flags: int) -> None:
         """
-        Set an item in a creative mode inventory slot.
+        Control vehicle movement and actions.
 
         Parameters
         ----------
-        slot: int
-            The inventory slot number to set the item in.
-        item: misc.Item
-            The item to place in the slot.
+        sideways: float
+            Sideways movement. Positive values steer to the left of the player.
+        forward: float
+            Forward movement. Positive values move forward.
+        flags: int
+            Bit mask for vehicle actions. 0x1: jump, 0x2: unmount.
         """
-        await self._state.tcp.creative_inventory_action(slot, item.to_dict())
-
-    async def clear_creative_slot(self, slot: int) -> None:
-        """
-        Clear (delete) an item from a creative mode inventory slot.
-
-        Parameters
-        ----------
-        slot: int
-            The inventory slot number to clear.
-        """
-        await self._state.tcp.creative_inventory_action(slot, None)
-
-    async def drop_creative_item(self, item: misc.Item) -> None:
-        """
-        Drop an item from creative inventory (spawn it in the world).
-
-        Parameters
-        ----------
-        item: misc.Item
-            The item to drop/spawn in the world.
-        """
-        await self._state.tcp.creative_inventory_action(-1, item.to_dict())
-
-    async def pickup_creative_item(self, slot: int) -> None:
-        """
-        Pick up (delete) an item from a creative inventory slot.
-
-        In creative mode, "picking up" an item actually deletes it from the server.
-        This is equivalent to clearing the slot.
-
-        Parameters
-        ----------
-        slot: int
-            The inventory slot number to pick up from.
-        """
-        await self._state.tcp.creative_inventory_action(slot, None)
-
-    async def creative_inventory_action(self, slot: int, clicked_item: Optional[misc.Item]) -> None:
-        """
-        Perform a raw creative inventory action.
-
-        This is the underlying method that handles all creative inventory interactions.
-        Consider using the more specific methods like set_creative_item(), clear_creative_slot(),
-        drop_creative_item(), or pickup_creative_item() instead.
-
-        Parameters
-        ----------
-        slot: int
-            The inventory slot number to interact with.
-            Use -1 to drop an item outside the inventory.
-        clicked_item: Optional[misc.Item]
-            The item to set in the slot, or None to clear the slot.
-        """
-        item_data = clicked_item.to_dict() if clicked_item else None
-        await self._state.tcp.creative_inventory_action(slot, item_data)
-
-    async def craft_recipe(self, window_id: int, recipe_id: int, make_all: bool = False) -> None:
-        """
-        Request to craft a recipe from the recipe book.
-
-        Parameters
-        ----------
-        window_id: int
-            The crafting window ID.
-        recipe_id: int
-            The recipe ID to craft.
-        make_all: bool
-            Whether to craft as many as possible (shift-click behavior).
-        """
-        await self._state.tcp.craft_recipe_request(window_id, recipe_id, make_all)
+        await self._state.tcp.steer_vehicle(sideways, forward, flags)

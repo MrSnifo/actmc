@@ -206,6 +206,11 @@ class ConnectionState:
     async def send_chat_message(self, message: str) -> None:
         await self.tcp.chat_message(message)
 
+    async def request_chat_command_suggestion(self, text: str, assume_command: bool, has_position: bool,
+                                              looked_at_block: Optional[math.Vector3D[int]]) -> None:
+        """Send tab-complete request for command or chat suggestions."""
+        await self.tcp.chat_command_suggestion(text, assume_command, has_position, looked_at_block)
+
     async def send_initial_packets(self) -> None:
         await self.tcp.handshake_packet()
         await self.tcp.login_packet(self._username)
@@ -315,7 +320,7 @@ class ConnectionState:
 
     async def parse_0x1a(self, buffer: protocol.ProtocolBuffer) -> None:
         reason = protocol.read_chat(buffer)
-        self._dispatch('disconnect', Message(reason))
+        self._dispatch('kicked', Message(reason))
 
     async def parse_0x0f(self, buffer: protocol.ProtocolBuffer) -> None:
         chat = protocol.read_chat(buffer)
@@ -665,6 +670,10 @@ class ConnectionState:
 
             if not player:
                 _logger.warning(f"Entity death for untracked player ID: %s", player_id)
+                return
+
+            if entity_id == -1:  # system or environmental death
+                self._dispatch('player_death', player, None, Message(message))
                 return
 
             if not entity:
@@ -1136,7 +1145,11 @@ class ConnectionState:
         window_id = protocol.read_ubyte(buffer)
 
         if window_id in self.windows:
-            del self.windows[window_id]
+            if window_id == 0:
+                for slot in self.windows[0].slots:
+                    slot.item = None
+            else:
+                del self.windows[window_id]
 
         self._dispatch('window_closed', window_id)
 
@@ -1161,16 +1174,33 @@ class ConnectionState:
         count = protocol.read_short(buffer)
 
         if window_id not in self.windows:
-            window = gui.Window(window_id, 'container', Message('inventory'), count)
-            self.windows[window_id] = window
+            _logger.warning(f"Received updates for unknown window ID: %s", window_id)
             return
 
         window = self.windows[window_id]
 
-        for i in range(count):
+        # Read container slots first
+        for i in range(window.slot_count):
             slot_data = protocol.read_slot(buffer)
             if slot_data is not None:
                 window.set_slot(i, slot_data)
+
+        # Handle remaining slots (player inventory)
+        remaining_slots = count - window.slot_count
+        if remaining_slots > 0:
+            # These are player inventory slots - update player inventory (window_id 0)
+            if window_id != 0 and 0 in self.windows:
+                player_window = self.windows[0]
+                for i in range(remaining_slots):
+                    slot_data = protocol.read_slot(buffer)
+                    if slot_data is not None and i < player_window.slot_count:
+                        player_window.set_slot(i, slot_data)
+                # Dispatch player inventory update
+                self._dispatch('window_items_updated', player_window)
+            else:
+                # Just consume the remaining slots if no player inventory window
+                for i in range(remaining_slots):
+                    protocol.read_slot(buffer)
 
         self._dispatch('window_items_updated', window)
 
@@ -1188,29 +1218,34 @@ class ConnectionState:
         self._dispatch('window_property_changed', window, property_id, value)
 
     async def parse_0x16(self, buffer: protocol.ProtocolBuffer) -> None:
-        window_id = protocol.read_byte(buffer)
+        """Parse Set Slot packet (0x16)"""
+        window_id = protocol.read_ubyte(buffer)
         slot_index = protocol.read_short(buffer)
         slot_data = protocol.read_slot(buffer)
 
-        # Handle special window IDs
-        if window_id == -1:
-            # Cursor slot (dragged item)
-            self._dispatch('cursor_slot_changed', slot_data)
-        elif window_id == -2:
-            if 0 in self.windows:
-                updated_slot = self.windows[0].set_slot(slot_index, slot_data)
-                self._dispatch('inventory_slot_changed', updated_slot)
-            else:
-                _logger.warning("Received inventory update but no player inventory window found")
-        else:
-            # Regular window slot update
-            if window_id not in self.windows:
-                _logger.warning(f"Received slot update for unknown window ID: %s", window_id)
-                return
+        if window_id not in self.windows:
+            return
 
-            window = self.windows[window_id]
-            updated_slot = window.set_slot(slot_index, slot_data)
-            self._dispatch('window_slot_changed', window, updated_slot)
+        window = self.windows[window_id]
+
+        # Handle slot indexing for containers
+        if window_id == 0:  # Player inventory
+            if 0 <= slot_index < len(window.slots):
+                window.set_slot(slot_index, slot_data)
+        else:  # Container (chest, furnace, etc.)
+            container_size = len(window.slots)
+
+            if slot_index < container_size:
+                # This is a container slot
+                window.set_slot(slot_index, slot_data)
+            else:
+                # This is a player inventory slot
+                player_slot_index = slot_index - container_size
+                if 0 in self.windows and player_slot_index < len(self.windows[0].slots):
+                    self.windows[0].set_slot(player_slot_index, slot_data)
+                    self._dispatch('window_items_updated', self.windows[0])
+
+        self._dispatch('window_items_updated', window)
 
     async def parse_0x30(self, buffer: protocol.ProtocolBuffer) -> None:
         entity_id = protocol.read_varint(buffer)

@@ -429,6 +429,49 @@ class Client:
         """
         await self._connection.send_client_status(1)
 
+    async def request_tab_complete(self, text: str, assume_command: bool = False) -> None:
+        """
+        Request tab completion suggestions from the server.
+
+        Parameters
+        ----------
+        text: str
+            All text behind the cursor (e.g. to the left of the cursor in left-to-right languages like English).
+        assume_command: bool
+            If true, the server will parse Text as a command even if it doesn't start with a `/`.
+            Used in the command block GUI. Defaults to False.
+
+        Notes
+        -----
+        The server responds by sending completion suggestions,
+        which are usually processed in the ``on_tab_complete`` handler.
+        """
+        await self._connection.request_chat_command_suggestion(text, assume_command, has_position=False,
+                                                               looked_at_block=None)
+
+    async def request_tab_complete_with_position(self, text: str, looked_at_block: Vector3D[int],
+                                                 assume_command: bool = False) -> None:
+        """
+        Request tab completion suggestions from the server with block position context.
+
+        Parameters
+        ----------
+        text: str
+            All text behind the cursor (e.g. to the left of the cursor in left-to-right languages like English).
+        looked_at_block: math.Vector3D[int]
+            The position of the block being looked at.
+        assume_command: bool
+            If true, the server will parse Text as a command even if it doesn't start with a `/`.
+            Used in the command block GUI. Defaults to False.
+
+        Notes
+        -----
+        The server responds by sending completion suggestions,
+        which are usually processed in the ``on_tab_complete`` handler.
+        """
+        await self._connection.request_chat_command_suggestion(text, assume_command, has_position=True,
+                                                               looked_at_block=looked_at_block)
+
     async def send_client_settings(self,
                                    locale: str = 'en_US',
                                    view_distance: int = 10,

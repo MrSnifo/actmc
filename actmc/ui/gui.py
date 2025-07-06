@@ -71,6 +71,7 @@ class Slot:
     def __repr__(self) -> str:
         return f"<Slot index={self.index}, item={self.item}>"
 
+
 class Window:
     """
     Represents a GUI window containing multiple item slots.
@@ -92,8 +93,10 @@ class Window:
         List of all slots in this window.
     properties: Dict[int, Any]
         Window-specific properties (furnace progress, etc.).
+    _action_counter: int
+        Counter for generating unique action numbers for window clicks.
     """
-    __slots__ = ('id', 'type', 'title', 'slot_count', 'entity_id', 'slots', 'properties', 'is_open')
+    __slots__ = ('id', 'type', 'title', 'slot_count', 'entity_id', 'slots', 'properties', 'is_open', '_action_counter')
 
     def __init__(self, window_id: int, window_type: str, title: Message, slot_count: int) -> None:
         self.id: int = window_id
@@ -102,6 +105,23 @@ class Window:
         self.slot_count: int = slot_count
         self.slots: List[Slot] = [Slot(i) for i in range(slot_count)]
         self.properties: Dict[int, Any] = {}
+        self._action_counter: int = 0
+
+    def get_next_action_number(self) -> int:
+        """
+        Generate the next unique action number for window clicks.
+
+        Each window click needs a unique action number that the server uses
+        to send back confirmation packets. This counter starts at 1 and
+        increments for each action.
+
+        Returns
+        -------
+        int
+            Unique action number for this window
+        """
+        self._action_counter += 1
+        return self._action_counter
 
     def set_slot(self, slot_index: int, item: Optional[ItemData]) -> Slot:
         """
@@ -171,7 +191,6 @@ class Window:
             New value for the property
         """
         self.properties[property_id] = value
-
 
     def __repr__(self) -> str:
         return f"<Window id={self.id}, slot_count={self.slot_count + 1}>"

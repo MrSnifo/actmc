@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from .errors import ProtocolError, ConnectionClosed, PacketError
+from .errors import ProtocolError, PacketError
 from typing import TYPE_CHECKING
 from .tcp import TcpClient
 from . import protocol
@@ -34,7 +34,6 @@ import zlib
 if TYPE_CHECKING:
     from typing import Self, Tuple, Optional
     from .state import ConnectionState
-    from . import Client
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -51,11 +50,12 @@ class MinecraftSocket:
         self.phase: int = 0
 
     @classmethod
-    async def initialize_socket(cls, host: str, port: Optional[int], state: ConnectionState) -> Self:
+    async def initialize_socket(cls, host: str, port: int, state: ConnectionState) -> Self:
         """Factory method to create and initialize a socket connection."""
+        _logger.debug("Attempting to establish socket connection to %s:%s", host, port)
         state.tcp = await TcpClient.connect(host, port)
         gateway = cls(state.tcp.reader, state=state)
-        _logger.info("Socket connection established successfully")
+        _logger.debug("Socket connection established successfully")
         await state.send_initial_packets()
         return gateway
 
@@ -140,14 +140,14 @@ class MinecraftSocket:
         threshold = protocol.read_varint(buffer)
         self._state.tcp.compression_threshold = threshold
         self.phase = 4
-        _logger.info(f"Packet compression enabled with threshold {threshold}")
+        _logger.debug(f"Packet compression enabled with threshold {threshold}")
 
     async def _handle_login_success(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle successful login completion."""
         self._state.uid = protocol.read_string(buffer)
         self._state.username = protocol.read_string(buffer)
         self.phase = 6
-        _logger.info(f"Login successful for player {self._state.username} (UUID: {self._state.uid})")
+        _logger.debug(f"Login successful for player {self._state.username} (UUID: {self._state.uid})")
 
     async def close(self) -> None:
         """Close the socket connection gracefully."""
