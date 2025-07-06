@@ -1178,30 +1178,21 @@ class ConnectionState:
             return
 
         window = self.windows[window_id]
-
-        # Read container slots first
         for i in range(window.slot_count):
             slot_data = protocol.read_slot(buffer)
             if slot_data is not None:
                 window.set_slot(i, slot_data)
 
-        # Handle remaining slots (player inventory)
         remaining_slots = count - window.slot_count
         if remaining_slots > 0:
-            # These are player inventory slots - update player inventory (window_id 0)
             if window_id != 0 and 0 in self.windows:
                 player_window = self.windows[0]
                 for i in range(remaining_slots):
                     slot_data = protocol.read_slot(buffer)
                     if slot_data is not None and i < player_window.slot_count:
                         player_window.set_slot(i, slot_data)
-                # Dispatch player inventory update
+                # Player's inventory.
                 self._dispatch('window_items_updated', player_window)
-            else:
-                # Just consume the remaining slots if no player inventory window
-                for i in range(remaining_slots):
-                    protocol.read_slot(buffer)
-
         self._dispatch('window_items_updated', window)
 
     async def parse_0x15(self, buffer: protocol.ProtocolBuffer) -> None:
