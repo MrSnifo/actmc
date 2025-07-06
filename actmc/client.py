@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from .errors import ClientException
+from .errors import ClientException, ConnectionClosed
 from .gateway import MinecraftSocket
 from .state import ConnectionState
 from typing import TYPE_CHECKING
@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from types import TracebackType
     from .ui.bossbar import BossBar
     from .ui.gui import Window
-    from .tcp import TcpClient
     from .user import User
 
 import logging
@@ -62,12 +61,18 @@ class Client:
     """
 
     def __init__(self, username: str) -> None:
+        # Core event loop and networking
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
-        self.tcp: Optional[TcpClient] = None
+
+        # Connection and state management
         self._connection: ConnectionState = self._get_state(username)
-        self._closing_task: Optional[asyncio.Task] = None
+        self._ready: Optional[asyncio.Event] = None
         self._closed = False
+        self._closing_task: Optional[asyncio.Task] = None
+
+    def _handle_ready(self) -> None:
+        self._ready.set()
 
     @property
     def user(self) -> Optional[User]:
@@ -252,7 +257,7 @@ class Client:
         """
         return self._closed
 
-    async def connect(self, host: str, port: Optional[int]) -> None:
+    async def connect(self, host: str, port: int) -> None:
         """
         Connect to a Minecraft server.
 
@@ -260,15 +265,15 @@ class Client:
         ----------
         host: str
             The server hostname or IP address.
-        port: Optional[int]
+        port: int
             The server port number.
 
         Raises
         ------
+        ConnectionClosed
+            If the connection is interrupted unexpectedly.
         ClientException
             If the client fails to connect.
-        asyncio.exceptions.IncompleteReadError
-            If the connection is interrupted unexpectedly.
 
         Notes
         -----
@@ -278,20 +283,22 @@ class Client:
         """
         while not self.is_closed():
             try:
-                socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
+                socket = MinecraftSocket.initialize_socket(host=host, port=port, state=self._connection)
                 self.socket = await asyncio.wait_for(socket, timeout=60.0)
                 self.dispatch('connect')
                 while True:
                     await self.socket.poll()
+            except asyncio.exceptions.IncompleteReadError as exc:
+                raise ConnectionClosed("Connection interrupted unexpectedly") from exc
+            except asyncio.TimeoutError as exc:
+                raise ClientException(f"Connection timeout to {host}:{port}") from exc
+            except OSError as exc:
+                if hasattr(exc, 'winerror') and exc.winerror == 121:
+                    raise ClientException(f"Network timeout connecting to {host}:{port}") from exc
+                else:
+                    raise ClientException(f"Failed to connect to {host}:{port}") from exc
 
-            except asyncio.exceptions.IncompleteReadError:
-                raise ClientException("Connection interrupted unexpectedly")
-            except (OSError, asyncio.TimeoutError) as exc:
-                if self.is_closed():
-                    return
-                raise ClientException(f"Connection failed to {host}:{port}: {exc}")
-
-    async def start(self, host: str, port: Optional[int]) -> None:
+    async def start(self, host: str, port: int) -> None:
         """
         Start the client and connect to the server.
 
@@ -299,7 +306,7 @@ class Client:
         ----------
         host: str
             The server hostname or IP address.
-        port: Optional[int]
+        port: int
             The server port number.
         """
         if self.loop is None:
@@ -326,11 +333,17 @@ class Client:
             self._closed = True
             self.loop = None
 
+            if self._ready is not None:
+                self._ready.clear()
+
+            self._ready = None
+
         self._closing_task = asyncio.create_task(_close())
         return await self._closing_task
 
     async def __aenter__(self) -> Client:
         """Asynchronous context manager entry method."""
+        await self._async_loop()
         return self
 
     async def __aexit__(self,
@@ -345,7 +358,7 @@ class Client:
 
     def run(self,
             host: str,
-            port: Optional[int] = 25565,
+            port: int = 25565,
             *,
             log_handler: Optional[logging.Handler] = None,
             log_level: Optional[Literal[0, 5, 10, 20, 30, 40, 50]] = None,
@@ -357,7 +370,7 @@ class Client:
         ----------
         host: str
             The server hostname or IP address.
-        port: Optional[int]
+        port: int
             The server port number.
         log_handler: Optional[logging.Handler]
             A logging handler to be used for logging output.
@@ -471,6 +484,17 @@ class Client:
         await self._connection.send_client_settings(locale, view_distance, chat_mode, chat_colors, cape, jacket,
                                                     left_sleeve, right_sleeve, left_pants, right_pants, hat, main_hand)
 
+    async def send_message(self, message: str) -> None:
+        """
+        Send a chat message to the server.
+
+        Parameters
+        ----------
+        message: str
+            The message to send.
+        """
+        await self._connection.send_chat_message(message)
+
     async def open_advancement_tab(self, tab_id: str) -> None:
         """
         Open a specific advancement tab.
@@ -488,9 +512,9 @@ class Client:
 
         Notes
         -----
-        This sends a packet to close the currently open advancement tab.
+        close the currently open advancement tab.
         """
-        await self.tcp.advancement_tab(1)
+        await self._connection.close_advancement_tab()
 
     async def set_resource_pack_status(self, result: int) -> None:
         """
@@ -551,12 +575,13 @@ class Client:
 
     def _get_state(self, username: str) -> ConnectionState:
         """Create and return a connection state object."""
-        return ConnectionState(username=username, dispatcher=self.dispatch)
+        return ConnectionState(username=username, dispatcher=self.dispatch, ready=self._handle_ready)
 
     async def _async_loop(self) -> None:
         """Initialize the asynchronous event loop for managing client operations."""
         loop = asyncio.get_running_loop()
         self.loop = loop
+        self._ready = asyncio.Event()
 
     async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
         """Run an event coroutine and handle exceptions."""
@@ -566,6 +591,42 @@ class Client:
             pass
         except Exception as error:
             await self.on_error(event_name, error, *args, **kwargs)
+
+    async def wait_until_ready(self) -> None:
+        """
+        Wait until the client's internal cache is ready.
+
+        This coroutine blocks until the client's internal state is fully initialized
+        and ready to be used.
+
+        Raises
+        ------
+        RuntimeError
+            If the client has not been initialized. Ensure that you use the asynchronous
+            context manager to initialize the client.
+
+        Warnings
+        --------
+        Calling this method inside `setup_hook()` may cause a deadlock.
+        """
+        if self._ready is not None:
+            await self._ready.wait()
+        else:
+            raise RuntimeError(
+                "The client is not initialized. Use the asynchronous context manager to initialize the client."
+            )
+
+    @property
+    def is_ready(self) -> bool:
+        """
+        Check whether the client's internal cache is ready.
+
+        Returns
+        -------
+        bool
+            True if the client is fully initialized and ready to be used, False otherwise.
+        """
+        return self._ready is not None and self._ready.is_set()
 
     @staticmethod
     async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:

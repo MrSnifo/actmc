@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from .errors import ProtocolError, DataTooShortError, InvalidDataError
+from .errors import ProtocolError, ConnectionClosed, PacketError
 from typing import TYPE_CHECKING
 from .tcp import TcpClient
 from . import protocol
@@ -51,11 +51,10 @@ class MinecraftSocket:
         self.phase: int = 0
 
     @classmethod
-    async def initialize_socket(cls, client: Client, host: str, port: Optional[int], state: ConnectionState) -> Self:
+    async def initialize_socket(cls, host: str, port: Optional[int], state: ConnectionState) -> Self:
         """Factory method to create and initialize a socket connection."""
-        client.tcp = await TcpClient.connect(host, port)
-        state.tcp = client.tcp
-        gateway = cls(client.tcp.reader, state=state)
+        state.tcp = await TcpClient.connect(host, port)
+        gateway = cls(state.tcp.reader, state=state)
         _logger.info("Socket connection established successfully")
         await state.send_initial_packets()
         return gateway
@@ -64,7 +63,7 @@ class MinecraftSocket:
         """Asynchronously read a variable-length integer from the stream."""
         data = bytearray()
 
-        for _ in range(5):  # MAX_VARINT_LENGTH
+        for _ in range(5):
             byte = await self._reader.readexactly(1)
             data.append(byte[0])
 
@@ -89,10 +88,10 @@ class MinecraftSocket:
             try:
                 decompressed_data = zlib.decompress(compressed_data)
             except zlib.error as e:
-                raise InvalidDataError(f"Packet decompression failed: {e}") from e
+                raise PacketError(f"Packet decompression failed: {e}") from e
 
             if len(decompressed_data) != uncompressed_length:
-                raise InvalidDataError(
+                raise PacketError(
                     f"Decompressed packet length mismatch: "
                     f"expected {uncompressed_length}, got {len(decompressed_data)}"
                 )
@@ -102,12 +101,8 @@ class MinecraftSocket:
 
     async def read_packet(self) -> Tuple[int, bytes]:
         """Read and parse a complete Minecraft protocol packet."""
-        try:
-            packet_length = await self._read_varint_async()
-            body = await self._reader.readexactly(packet_length)
-        except asyncio.IncompleteReadError as e:
-            raise DataTooShortError("Connection closed while reading packet") from e
-
+        packet_length = await self._read_varint_async()
+        body = await self._reader.readexactly(packet_length)
         body = self._decompress_payload(body)
         buffer = protocol.ProtocolBuffer(body)
         packet_id = protocol.read_varint(buffer)
@@ -120,16 +115,16 @@ class MinecraftSocket:
         buffer = protocol.ProtocolBuffer(data)
         _logger.trace(f"Processing packet ID 0x{packet_id:02X}") # type: ignore
 
-        if packet_id == 0x1F:  # KEEP_ALIVE_CLIENTBOUND
+        if packet_id == 0x1F:
             await self._handle_keep_alive(buffer)
             return
 
-        if self.phase != 6:  # PHASE_PLAY
-            if packet_id == 0x03:  # SET_COMPRESSION
+        if self.phase != 6:
+            if packet_id == 0x03:
                 await self._handle_compression_setup(buffer)
                 return
 
-            if packet_id == 0x02:  # LOGIN_SUCCESS
+            if packet_id == 0x02:
                 await self._handle_login_success(buffer)
                 return
 
@@ -144,14 +139,14 @@ class MinecraftSocket:
         """Handle compression setup packet during login."""
         threshold = protocol.read_varint(buffer)
         self._state.tcp.compression_threshold = threshold
-        self.phase = 4  # PHASE_COMPRESSION_SETUP
+        self.phase = 4
         _logger.info(f"Packet compression enabled with threshold {threshold}")
 
     async def _handle_login_success(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle successful login completion."""
         self._state.uid = protocol.read_string(buffer)
         self._state.username = protocol.read_string(buffer)
-        self.phase = 6  # PHASE_PLAY
+        self.phase = 6
         _logger.info(f"Login successful for player {self._state.username} (UUID: {self._state.uid})")
 
     async def close(self) -> None:

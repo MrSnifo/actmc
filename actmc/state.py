@@ -21,11 +21,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
-
 from __future__ import annotations
 
 from . import entities, math, protocol
 from typing import TYPE_CHECKING
+import asyncio
 from .ui.chat import Message
 from .ui import tablist, gui, bossbar, border, scoreboard, actionbar, advancement
 from .user import User
@@ -35,26 +35,31 @@ from .utils import position_to_chunk_relative
 from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, Optional
+    from typing import Any, Callable, Dict, Optional, Set
     from .tcp import TcpClient
 
 import logging
-_logger = logging.getLogger(__name__)
 
+_logger = logging.getLogger(__name__)
 __all__ = ('ConnectionState',)
 
-class ConnectionState:
 
-    # Class-level packet parser cache for performance
+class ConnectionState:
     _packet_parsers: Dict[int, str] = {}
 
-    def __init__(self, username: str, dispatcher: Callable[..., Any]) -> None:
+    def __init__(self, username: str, dispatcher: Callable[..., Any], ready: Callable[..., None]) -> None:
+        # Network and dispatcher
         self.tcp: Optional[TcpClient] = None
         self._dispatch = dispatcher
         self._load_chunks = True
-        # Player state
-        self.username: Optional[str] = username
-        self.uid: Optional[str] = None
+
+        # Ready state handling
+        self._ready_callback = ready
+        self._ready_called = False
+
+        # Player information
+        self._username: Optional[str] = username
+        self._uid: Optional[str] = None
         self.user: Optional[User] = None
 
         # Server information
@@ -67,38 +72,42 @@ class ConnectionState:
         # World state
         self.chunks: Dict[math.Vector2D, Chunk] = {}
         self.world_border: Optional[border.WorldBorder] = None
-
         self.entities: Dict[int, entities.entity.Entity] = {}
         self.tablist: Dict[str, tablist.PlayerInfo] = {}
         self.windows: Dict[int, gui.Window] = {}
         self.boss_bars: Dict[str, bossbar.BossBar] = {}
         self.scoreboard_objectives: Dict[str, scoreboard.Scoreboard] = {}
-        self.action_bar: actionbar.Title =  actionbar.Title()
+        self.action_bar: actionbar.Title = actionbar.Title()
 
-        # Initialize packet parser cache
+        # Async chunk loading
+        self._chunk_tasks: Set[asyncio.Task] = set()
+
+        # Packet parser cache initialization
         if not self._packet_parsers:
             self._build_parser_cache()
 
     def clear(self) -> None:
         """Clear all connection state data."""
+        self._ready_called = False
         self.tcp = None
 
-        # Clear player state (keep username as it's set during init)
-        self.uid = None
-        self.user = None
+        # Cancel any ongoing chunk loading tasks
+        for task in self._chunk_tasks:
+            task.cancel()
+        self._chunk_tasks.clear()
 
-        # Clear server information
+        # Reset player and server state
+        self._uid = None
+        self.user = None
         self.difficulty = None
         self.max_players = None
         self.world_type = None
         self.world_age = None
         self.time_of_day = None
 
-        # Clear world state
+        # Clear world and UI elements
         self.chunks.clear()
         self.world_border = None
-
-        # Clear game objects
         self.entities.clear()
         self.tablist.clear()
         self.windows.clear()
@@ -108,93 +117,118 @@ class ConnectionState:
 
     @classmethod
     def _build_parser_cache(cls) -> None:
-        """Build a performance cache mapping packet IDs to parser methods."""
         for attr_name in dir(cls):
             if attr_name.startswith('parse_0x'):
                 try:
                     packet_id = int(attr_name[8:], 16)
                     cls._packet_parsers[packet_id] = attr_name
                 except ValueError:
-                    _logger.warning(f"Invalid packet parser method name: %s", attr_name)
                     continue
 
-    # ------------------------------
+    def _check_ready_state(self) -> None:
+        """Check if user is ready."""
+        if self._ready_called and not self.user:
+            return
+
+        if not hasattr(self.user, 'food_saturation'):
+            return
+
+        if not hasattr(self.user, 'total_experience'):
+            return
+
+        if not hasattr(self.user, 'held_slot'):
+            return
+
+        if not hasattr(self.user, 'spawn_point'):
+            return
+
+        if not hasattr(self.user, 'fov_modifier'):
+            return
+
+        self._ready_called = True
+        if self._ready_callback:
+            self._ready_callback()
+
+        self._dispatch('ready')
+
+    async def _load_chunk_task(self, chunk_x: int, chunk_z: int, ground_up_continuous: bool,
+                               primary_bit_mask: int, chunk_buffer: bytes, block_entities_data: list) -> None:
+        """Load chunk in background task."""
+        try:
+            chunk = Chunk(math.Vector2D(chunk_x, chunk_z))
+            chunk.load_chunk_column(ground_up_continuous, primary_bit_mask, chunk_buffer)
+
+            # Add block entities
+            for data in block_entities_data:
+                pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z')).to_int()
+                entity_id = data.pop('id')
+                chunk_coords, block_pos, section_y = position_to_chunk_relative(pos)
+
+                section = chunk.get_section(section_y)
+                if section is None:
+                    section = ChunkSection(math.Vector2D(0, 0))
+                    chunk.set_section(section_y, section)
+
+                block_entity = self._create_block_entity(entity_id, data)
+                section.set_entity(block_pos, block_entity)
+
+            if self._load_chunks:
+                self.chunks[math.Vector2D(chunk_x, chunk_z)] = chunk
+
+            self._dispatch('chunk_load', chunk)
+
+        except Exception as exc:
+            _logger.exception(f"Chunk loading failed: {exc}", exc)
+        finally:
+            current_task = asyncio.current_task()
+            self._chunk_tasks.discard(current_task)
+
+    # Client methods
     async def send_client_status(self, action_id: int) -> None:
-        """0 for respawn and 1 for statistics"""
         await self.tcp.client_status(action_id)
 
     async def send_client_settings(self, locale: str, view_distance: int, chat_mode: int, chat_colors: bool,
                                    cape: bool, jacket: bool, left_sleeve: bool, right_sleeve: bool, left_pants: bool,
                                    right_pants: bool, hat: bool, main_hand: int) -> None:
-        """Send client settings to the server."""
-        skin_parts = 0
-        if cape:
-            skin_parts |= 0x01
-        if jacket:
-            skin_parts |= 0x02
-        if left_sleeve:
-            skin_parts |= 0x04
-        if right_sleeve:
-            skin_parts |= 0x08
-        if left_pants:
-            skin_parts |= 0x10
-        if right_pants:
-            skin_parts |= 0x20
-        if hat:
-            skin_parts |= 0x40
+        skin_parts = (cape << 0) | (jacket << 1) | (left_sleeve << 2) | (right_sleeve << 3) | (left_pants << 4) | (
+                    right_pants << 5) | (hat << 6)
         await self.tcp.client_settings(locale, view_distance, chat_mode, chat_colors, skin_parts, main_hand)
 
-
     async def open_advancement_tab(self, tab_id: str) -> None:
-        """Open a specific advancement tab."""
         await self.tcp.advancement_tab(0, tab_id)
 
     async def close_advancement_tab(self) -> None:
-        """Close the advancement tab."""
         await self.tcp.advancement_tab(1)
 
     async def set_resource_pack_status(self, result: int) -> None:
-        """Respond to a resource pack request."""
         await self.tcp.resource_pack_status(result)
 
-    # ============================== Network Operations ==============================
+    async def send_chat_message(self, message: str) -> None:
+        await self.tcp.chat_message(message)
 
     async def send_initial_packets(self) -> None:
         await self.tcp.handshake_packet()
-        await self.tcp.login_packet(self.username)
-
-        # Performance warning for chunk loading
-        if self._load_chunks:
-            _logger.warning(
-                "Chunk loading is enabled - may cause performance issues "
-                "and increased memory usage on large worlds"
-            )
-
+        await self.tcp.login_packet(self._username)
         self._dispatch('handshake')
 
-    # ============================== World State Management ==============================
+    # World state methods
     def get_block_state(self, position: math.Vector3D[int]) -> Optional[Block]:
         if not self._load_chunks:
-            raise RuntimeError("Chunk loading is disabled - cannot query block states")
+            raise RuntimeError("Chunk loading is disabled")
 
         chunk_coords, block_pos, section_y = position_to_chunk_relative(position)
-
         chunk = self.chunks.get(chunk_coords)
         if chunk is None:
             return None
 
         section = chunk.get_section(section_y)
-        if section is None:
-            return None
-
-        return section.get_state(block_pos)
+        return section.get_state(block_pos) if section else None
 
     def set_block_state(self, state: Block) -> None:
         if not self._load_chunks:
-            raise RuntimeError("Chunk loading is disabled - cannot modify block states")
+            raise RuntimeError("Chunk loading is disabled")
 
         chunk_coords, block_pos, section_y = position_to_chunk_relative(state.position)
-
         chunk = self.chunks.get(chunk_coords)
         if chunk is None:
             return
@@ -208,10 +242,9 @@ class ConnectionState:
 
     def set_block_entity(self, pos: math.Vector3D[int], block_entity: entities.entity.BaseEntity[str]) -> None:
         if not self._load_chunks:
-            raise RuntimeError("Chunk loading is disabled - cannot modify block entities")
+            raise RuntimeError("Chunk loading is disabled")
 
         chunk_coords, block_pos, section_y = position_to_chunk_relative(pos)
-
         chunk = self.chunks.get(chunk_coords)
         if chunk is None:
             return
@@ -226,108 +259,77 @@ class ConnectionState:
     @staticmethod
     def _create_block_entity(entity_id: str, data: Any) -> entities.entity.BaseEntity[str]:
         entity = BLOCK_ENTITY_TYPES.get(entity_id)
-
         if entity:
             return entity(entity_id, data)
         else:
-            # Create generic entity for unknown types
-            block_entity = entities.entity.BaseEntity(entity_id)
-            if data:
-                _logger.warning(f"Unknown block entity: %s, with data: %s", entity_id, data)
-            return block_entity
+            return entities.entity.BaseEntity(entity_id)
 
     @staticmethod
-    def _create_mob_entity(mob_type: int,
-                           entity_id: int,
-                           uuid: str,
-                           position: math.Vector3D[float],
-                           rotation: math.Rotation,
-                           metadata: Dict[int, Dict[str, Any]]) -> Any:
+    def _create_mob_entity(mob_type: int, entity_id: int, uuid: str, position: math.Vector3D[float],
+                           rotation: math.Rotation, metadata: Dict[int, Dict[str, Any]]) -> Any:
         entity_class = MOB_ENTITY_TYPES.get(mob_type)
         if entity_class:
             return entity_class(entity_id, uuid, position, rotation, metadata)
         else:
-            mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, metadata)
-            if mob_type:
-                _logger.warning(f"Unknown mob entity: %s, Type: '%s, With data: %s", entity_id, mob_entity,
-                                metadata)
-            return mob_entity
+            return entities.entity.Entity(entity_id, uuid, position, rotation, metadata)
 
     @staticmethod
-    def _create_object_entity(object_type: int,
-                           entity_id: int,
-                           uuid: str,
-                           position: math.Vector3D[float],
-                           rotation: math.Rotation,
-                           data: int) -> Any:
+    def _create_object_entity(object_type: int, entity_id: int, uuid: str, position: math.Vector3D[float],
+                              rotation: math.Rotation, data: int) -> Any:
         entity = OBJECT_ENTITY_TYPES.get(object_type)
         if entity:
             if isinstance(entity, dict):
                 entity = entity.get(data)
             return entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
         else:
-            mob_entity = entities.entity.Entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
-            if object_type:
-                _logger.warning(f"Unknown object entity: %s, Type: '%s', With data: %s", entity_id,
-                                object_type, data)
-            return mob_entity
+            return entities.entity.Entity(entity_id, uuid, position, rotation, {-1: {'value': data}})
 
+    # Packet parsing
     async def parse(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
         try:
             parser_name = self._packet_parsers.get(packet_id)
             if parser_name:
                 func = getattr(self, parser_name)
                 await func(buffer)
-
         except Exception as error:
             _logger.exception(f"Failed to parse packet 0x{packet_id:02X}: {error}")
             self._dispatch('error', packet_id, error)
 
     async def parse_0x23(self, buffer: protocol.ProtocolBuffer) -> None:
-        # Parse player information
         entity_id = protocol.read_int(buffer)
         gamemode = protocol.read_ubyte(buffer)
         dimension = protocol.read_int(buffer)
-
-        # Parse server information
         self.difficulty = protocol.read_ubyte(buffer)
         self.max_players = protocol.read_ubyte(buffer)
         self.world_type = protocol.read_string(buffer).lower()
 
-        # Update player state
-        self.user = User(entity_id, self.username, self.uid, state=self)
-        self.user.gamemode = gamemode
-        self.user.dimension = dimension
-        # Player's inventory.
+        user = User(entity_id, self._username, self._uid, state=self)
+        user.gamemode = gamemode
+        user.dimension = dimension
+        self.user = user
+
         self.windows[0] = gui.Window(0, 'container', Message('inventory'), 45)
-        # Needed to update user properties and metadata.
         self.entities[entity_id] = self.user
+        self._check_ready_state()
         self._dispatch('join')
 
     async def parse_0x1a(self, buffer: protocol.ProtocolBuffer) -> None:
         reason = protocol.read_chat(buffer)
-        message = Message(reason)
-
-        self._dispatch('disconnect', message)
+        self._dispatch('disconnect', Message(reason))
 
     async def parse_0x0f(self, buffer: protocol.ProtocolBuffer) -> None:
         chat = protocol.read_chat(buffer)
         position = protocol.read_ubyte(buffer)
-
         message = Message(chat)
         message_type = {0: 'chat_message', 1: 'system_message', 2: 'action_bar'}.get(position)
         if message_type:
             self._dispatch(message_type, message)
-        else:
-            _logger.warning(f"Unknown chat Position: %s, For message: %s", position, message)
 
     async def parse_0x0d(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Server Difficulty packet (0x0D)."""
-        difficulty = protocol.read_ubyte(buffer)
-        self.difficulty = difficulty
+        self.difficulty = protocol.read_ubyte(buffer)
 
     async def parse_0x20(self, buffer: protocol.ProtocolBuffer) -> None:
-        # Parse chunk metadata
+        """Handle Chunk Data packet with async task."""
         chunk_x = protocol.read_int(buffer)
         chunk_z = protocol.read_int(buffer)
         ground_up_continuous = protocol.read_bool(buffer)
@@ -336,32 +338,17 @@ class ConnectionState:
         chunk_buffer = protocol.read_byte_array(buffer, size)
         num_block_entities = protocol.read_varint(buffer)
 
-        # Create and load chunk
-        chunk = Chunk(math.Vector2D(chunk_x, chunk_z))
-        chunk.load_chunk_column(ground_up_continuous, primary_bit_mask, chunk_buffer)
-
-        # Process block entities
+        block_entities_data = []
         for _ in range(num_block_entities):
-            data = protocol.read_nbt(buffer)
-            entity_pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z')).to_int()
-            entity_id = data.pop('id')
+            block_entities_data.append(protocol.read_nbt(buffer))
 
-            # Add block entity to appropriate chunk section
-            chunk_coords, block_pos, section_y = position_to_chunk_relative(entity_pos)
-            section = chunk.get_section(section_y)
-
-            if section is None:
-                section = ChunkSection(math.Vector2D(0, 0))
-                chunk.set_section(section_y, section)
-
-            block_entity = self._create_block_entity(entity_id, data)
-            section.set_entity(block_pos, block_entity)
-
-        # Store chunk if loading is enabled
         if self._load_chunks:
-            self.chunks[math.Vector2D(chunk_x, chunk_z)] = chunk
-
-        self._dispatch('chunk_load', chunk)
+            # Create background task for chunk loading
+            task = asyncio.create_task(
+                self._load_chunk_task(chunk_x, chunk_z, ground_up_continuous,
+                                      primary_bit_mask, chunk_buffer, block_entities_data)
+            )
+            self._chunk_tasks.add(task)
 
     async def parse_0x1d(self, buffer: protocol.ProtocolBuffer) -> None:
         chunk_x = protocol.read_int(buffer)
@@ -494,17 +481,21 @@ class ConnectionState:
 
         self._dispatch('block_entity_update', pos, block_entity)
 
-    # USER
     async def parse_0x41(self, data: protocol.ProtocolBuffer) -> None:
         self.user.health = protocol.read_float(data)
         self.user.food = protocol.read_varint(data)
         self.user.food_saturation = protocol.read_float(data)
+
+        self._check_ready_state()
         self._dispatch('player_health_update', self.user.health, self.user.food, self.user.food_saturation)
+
 
     async def parse_0x40(self, data: protocol.ProtocolBuffer) -> None:
         self.user.experience_bar = protocol.read_float(data)
         self.user.level = protocol.read_varint(data)
         self.user.total_experience = protocol.read_varint(data)
+
+        self._check_ready_state()
         self._dispatch('player_experience_set', self.user.level, self.user.total_experience, self.user.experience_bar)
 
     async def parse_0x21(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -517,8 +508,8 @@ class ConnectionState:
 
     async def parse_0x3a(self, data: protocol.ProtocolBuffer) -> None:
         self.user.held_slot = protocol.read_byte(data)
+        self._check_ready_state()
         self._dispatch('held_slot_change', self.user.held_slot)
-
 
     async def parse_0x1e(self, data: protocol.ProtocolBuffer) -> None:
         reason = protocol.read_ubyte(data)
@@ -1293,6 +1284,7 @@ class ConnectionState:
         self.user.creative_mode =  bool(flags & 0x08)
         self.user.flying_speed = flying_speed
         self.user.fov_modifier = fov_modifier
+        self._check_ready_state()
         self._dispatch('player_abilities_change')
 
     async def parse_0x38(self, buffer: protocol.ProtocolBuffer) -> None:

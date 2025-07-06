@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from .errors import ClientException, InvalidDataError
+from .errors import InvalidDataError, ConnectionClosed, PacketError
 from typing import TYPE_CHECKING
 from actmc import protocol
 import asyncio
@@ -43,7 +43,8 @@ _logger = logging.getLogger(__name__)
 class TcpClient:
     """TCP connection handler for Minecraft protocol communication."""
     DEFAULT_LIMIT: ClassVar[int] = 65536
-    PROTOCOL_VERSION: ClassVar[int] = 340  # Minecraft 1.12.2
+    # Minecraft 1.12.2
+    PROTOCOL_VERSION: ClassVar[int] = 340
     COMPRESSION_THRESHOLD_DEFAULT: ClassVar[int] = -1
 
     def __init__(self, host: str, port: int, reader: StreamReader, writer: StreamWriter) -> None:
@@ -65,14 +66,14 @@ class TcpClient:
     def reader(self) -> StreamReader:
         """Get the stream reader."""
         if self._closed:
-            raise ClientException("Connection is closed")
+            raise ConnectionClosed("Connection is closed")
         return self._reader
 
     @property
     def writer(self) -> StreamWriter:
         """Get the stream writer."""
         if self._closed:
-            raise ClientException("Connection is closed")
+            raise ConnectionClosed("Connection is closed")
         return self._writer
 
     @property
@@ -84,8 +85,12 @@ class TcpClient:
         """Close the connection gracefully."""
         if not self._closed:
             self._writer.close()
-            await self._writer.wait_closed()
-            self._closed = True
+            try:
+                await asyncio.wait_for(self._writer.wait_closed(), timeout=5.0)
+            except (OSError, asyncio.TimeoutError):
+                pass
+            finally:
+                self._closed = True
 
     def _compress_payload(self, payload: bytes) -> bytes:
         """Compress payload data if compression is enabled."""
@@ -108,7 +113,7 @@ class TcpClient:
     async def write_packet(self, packet_id: int, data: protocol.ProtocolBuffer) -> None:
         """Write a complete Minecraft protocol packet."""
         if self.is_closed:
-            raise ClientException("Cannot write to closed connection")
+            raise ConnectionClosed("Cannot write to closed connection")
 
         try:
             packet_id_bytes = protocol.write_varint(packet_id)
@@ -120,13 +125,14 @@ class TcpClient:
             self.writer.write(body)
             await self.writer.drain()
             _logger.debug("Sent packet 0x%02X", packet_id)
-        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
-            raise ClientException(f"Connection lost while writing packet 0x{packet_id:02X}")
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError) as e:
+            raise ConnectionClosed(f"Connection lost while writing packet 0x{packet_id:02X}") from e
         except OSError as e:
-            raise ClientException(f"Network error writing packet 0x{packet_id:02X}: {e}")
+            raise ConnectionClosed(f"Network error writing packet 0x{packet_id:02X}: {e}") from e
         except (ValueError, TypeError) as e:
-            raise InvalidDataError(f"Invalid packet data for 0x{packet_id:02X}: {e}")
-
+            raise InvalidDataError(f"Invalid packet data for 0x{packet_id:02X}: {e}") from e
+        except Exception as e:
+            raise PacketError(f"Unexpected error writing packet 0x{packet_id:02X}: {e}") from e
 
     def handshake_packet(self, next_state: int = 2) -> Coroutine[Any, Any, None]:
         """Construct the Minecraft handshake packet."""
@@ -344,3 +350,9 @@ class TcpClient:
         buffer.write(protocol.pack_ubyte(skin_parts))
         buffer.write(protocol.write_varint(main_hand))
         return self.write_packet(0x04, buffer)
+
+    def chat_message(self, message: str) -> Coroutine[Any, Any, None]:
+        """Send a chat message to the server. Message must be 256 characters or fewer."""
+        buffer = protocol.ProtocolBuffer()
+        buffer.write(protocol.pack_string(message))
+        return self.write_packet(0x02, buffer)

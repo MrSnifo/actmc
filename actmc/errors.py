@@ -24,7 +24,10 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-__all__ = ('ActmcException', 'ClientException', 'ProtocolError', 'DataTooShortError', 'InvalidDataError')
+__all__ = (
+    'ActmcException', 'ClientException', 'ProtocolError', 'DataTooShortError', 'InvalidDataError',
+    'ConnectionClosed', 'PacketError'
+)
 
 
 class ActmcException(Exception):
@@ -53,4 +56,15 @@ class DataTooShortError(ProtocolError):
 
 class InvalidDataError(ProtocolError):
     """Raised when data format is invalid"""
+    pass
+
+
+# Connection and core exceptions
+class ConnectionClosed(ClientException):
+    """Raised when connection to server is closed unexpectedly"""
+    pass
+
+
+class PacketError(ProtocolError):
+    """Raised when packet handling fails"""
     pass

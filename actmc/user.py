@@ -44,6 +44,7 @@ class User(Player):
         dimension: int
 
         # Health
+        health: float
         food: int
         food_saturation: float
 
