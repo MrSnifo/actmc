@@ -29,6 +29,7 @@ from .gateway import MinecraftSocket
 from .state import ConnectionState
 from typing import TYPE_CHECKING
 from .utils import setup_logging
+from .tcp import TcpClient
 import asyncio
 
 if TYPE_CHECKING:
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from .ui.border import WorldBorder
     from .ui.tablist import PlayerInfo
     from .ui.actionbar import Title
+    from .entities.misc import Item
     from .chunk import Chunk, Block
     from types import TracebackType
     from .ui.bossbar import BossBar
@@ -64,11 +66,11 @@ class Client:
         # Core event loop and networking
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
+        self.tcp: TcpClient = TcpClient()
 
         # Connection and state management
         self._connection: ConnectionState = self._get_state(username)
         self._ready: Optional[asyncio.Event] = None
-        self._closed = False
         self._closing_task: Optional[asyncio.Task] = None
 
     def _handle_ready(self) -> None:
@@ -247,15 +249,7 @@ class Client:
         return self._connection.get_block_state(pos)
 
     def is_closed(self) -> bool:
-        """
-        Check if the client connection is closed.
-
-        Returns
-        -------
-        bool
-            True if the connection is closed, False otherwise.
-        """
-        return self._closed
+        return self._closing_task is not None
 
     async def connect(self, host: str, port: int) -> None:
         """
@@ -283,13 +277,14 @@ class Client:
         """
         while not self.is_closed():
             try:
-                socket = MinecraftSocket.initialize_socket(host=host, port=port, state=self._connection)
+                socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
                 self.socket = await asyncio.wait_for(socket, timeout=60.0)
                 self.dispatch('connect')
                 while True:
                     await self.socket.poll()
             except (ConnectionClosed, asyncio.exceptions.IncompleteReadError, asyncio.TimeoutError, OSError) as exc:
                 self.dispatch('disconnect')
+                await self.close()
                 if self.is_closed():
                     return
                 if isinstance(exc, ConnectionClosed):
@@ -304,7 +299,7 @@ class Client:
                     else:
                         raise ClientException(f"Failed to connect to {host}:{port}") from None
 
-    async def start(self, host: str, port: int) -> None:
+    async def start(self, host: str, port: int = 25565) -> None:
         """
         Start the client and connect to the server.
 
@@ -317,7 +312,19 @@ class Client:
         """
         if self.loop is None:
             await self._async_loop()
+
         await self.connect(host, port)
+
+    def clear(self) -> None:
+        """
+        Clear the internal state of the bot.
+
+        Resets the bot to an uninitialized state, clearing all internal caches
+        and connection state.
+        """
+        self._closing_task = None
+        self._ready.clear()
+        self._connection.clear()
 
     async def close(self) -> None:
         """
@@ -337,12 +344,12 @@ class Client:
 
             self._connection.clear()
             self._closed = True
-            self.loop = None
 
             if self._ready is not None:
                 self._ready.clear()
 
-            self._ready = None
+            self.tcp.clear()
+            self.loop = None
 
         self._closing_task = asyncio.create_task(_close())
         return await self._closing_task
@@ -404,19 +411,14 @@ class Client:
                 await self.start(host, port)
 
         try:
+
             asyncio.run(runner())
         except KeyboardInterrupt:
             return
 
     async def perform_respawn(self) -> None:
-        """
-        Request the server to respawn the player.
-
-        Notes
-        -----
-        Typically used after death to rejoin the world.
-        """
-        await self._connection.send_client_status(0)
+        """Request the server to respawn the player."""
+        await self._connection.tcp.client_status(0)
 
     async def request_stats(self) -> None:
         """
@@ -427,7 +429,7 @@ class Client:
         The server responds by sending the statistics,
         which are usually processed in the ``on_statistics`` handler.
         """
-        await self._connection.send_client_status(1)
+        await self._connection.tcp.client_status(1)
 
     async def request_tab_complete(self, text: str, assume_command: bool = False) -> None:
         """
@@ -446,31 +448,30 @@ class Client:
         The server responds by sending completion suggestions,
         which are usually processed in the ``on_tab_complete`` handler.
         """
-        await self._connection.request_chat_command_suggestion(text, assume_command, has_position=False,
-                                                               looked_at_block=None)
+        await self._connection.tcp.chat_command_suggestion(text, assume_command, has_position=False,
+                                                           looked_at_block=None)
 
     async def request_tab_complete_with_position(self, text: str, looked_at_block: Vector3D[int],
                                                  assume_command: bool = False) -> None:
         """
-        Request tab completion suggestions from the server with block position context.
+        Request tab completion suggestions with block position context.
 
         Parameters
         ----------
         text: str
-            All text behind the cursor (e.g. to the left of the cursor in left-to-right languages like English).
-        looked_at_block: math.Vector3D[int]
-            The position of the block being looked at.
+            All text behind the cursor.
+        looked_at_block: Vector3D[int]
+            Position of the block being looked at.
         assume_command: bool
-            If true, the server will parse Text as a command even if it doesn't start with a `/`.
-            Used in the command block GUI. Defaults to False.
+            If True, parse text as command even without `/`.
 
         Notes
         -----
         The server responds by sending completion suggestions,
         which are usually processed in the ``on_tab_complete`` handler.
         """
-        await self._connection.request_chat_command_suggestion(text, assume_command, has_position=True,
-                                                               looked_at_block=looked_at_block)
+        await self._connection.tcp.chat_command_suggestion(text, assume_command, has_position=True,
+                                                           looked_at_block=looked_at_block)
 
     async def send_client_settings(self,
                                    locale: str = 'en_US',
@@ -515,23 +516,9 @@ class Client:
         main_hand: int
             Main hand (0=left, 1=right).
         """
-        skin_parts = 0
-        if cape:
-            skin_parts |= 0x01
-        if jacket:
-            skin_parts |= 0x02
-        if left_sleeve:
-            skin_parts |= 0x04
-        if right_sleeve:
-            skin_parts |= 0x08
-        if left_pants:
-            skin_parts |= 0x10
-        if right_pants:
-            skin_parts |= 0x20
-        if hat:
-            skin_parts |= 0x40
-        await self._connection.send_client_settings(locale, view_distance, chat_mode, chat_colors, cape, jacket,
-                                                    left_sleeve, right_sleeve, left_pants, right_pants, hat, main_hand)
+        skin_parts = (cape << 0) | (jacket << 1) | (left_sleeve << 2) | (right_sleeve << 3) | \
+                     (left_pants << 4) | (right_pants << 5) | (hat << 6)
+        await self._connection.tcp.client_settings(locale, view_distance, chat_mode, chat_colors, skin_parts, main_hand)
 
     async def send_message(self, message: str) -> None:
         """
@@ -542,28 +529,37 @@ class Client:
         message: str
             The message to send.
         """
-        await self._connection.send_chat_message(message)
+        await self._connection.tcp.chat_message(message)
 
-    async def open_advancement_tab(self, tab_id: str) -> None:
+    async def request_advancement_tab(self, tab_id: str) -> None:
         """
-        Open a specific advancement tab.
+        Request to open a specific advancement tab.
 
         Parameters
         ----------
         tab_id: str
-            The advancement tab identifier.
-        """
-        await self._connection.open_advancement_tab(tab_id)
+            The advancement tab identifier, Valid tabs:
 
-    async def close_advancement_tab(self) -> None:
-        """
-        Close the advancement tab.
+            - minecraft:story/root
+
+            - minecraft:nether/root
+
+            - minecraft:end/root
+
+            - minecraft:adventure/root
+
+            - minecraft:husbandry/root
 
         Notes
         -----
-        close the currently open advancement tab.
+        The server responds by sending the advancement data,
+        which are usually processed in the ``on_advancements`` handler.
         """
-        await self._connection.close_advancement_tab()
+        await self._connection.tcp.advancement_tab(0, tab_id)
+
+    async def close_advancement_tab(self) -> None:
+        """Close the advancement tab."""
+        await self._connection.tcp.advancement_tab(1)
 
     async def set_resource_pack_status(self, result: int) -> None:
         """
@@ -574,7 +570,450 @@ class Client:
         result: int
             Status code (0=loaded, 1=declined, 2=failed, 3=accepted).
         """
-        await self._connection.set_resource_pack_status(result)
+        await self._connection.tcp.resource_pack_status(result)
+
+    async def set_displayed_recipe(self, recipe_id: int) -> None:
+        """
+        Set the currently displayed recipe in the crafting book.
+
+        This method sends a Crafting Book Data packet (type 0) to the server to update
+        which recipe is currently being shown or highlighted in the crafting book interface.
+        The recipe will be visually highlighted for the player.
+
+        Parameters
+        ----------
+        recipe_id: int
+            The internal ID of the recipe to display. This ID corresponds to the
+            server's recipe registry and must be a valid recipe identifier.
+        """
+        await self._connection.tcp.crafting_book_data_displayed_recipe(recipe_id)
+
+    async def set_crafting_book_status(self, crafting_book_open: bool, crafting_filter: bool) -> None:
+        """
+        Update the crafting book's open state and filter settings.
+
+        This method sends a Crafting Book Data packet (type 1) to the server to update
+        the player's crafting book interface state. Controls both the visibility of
+        the crafting book and whether the crafting filter is active.
+
+        Parameters
+        ----------
+        crafting_book_open: bool
+            Whether the crafting book is currently opened/active in the UI.
+            When True, the crafting book will be visible to the player.
+        crafting_filter: bool
+            Whether the crafting filter option is currently active.
+            When True, only shows recipes that can be crafted with available materials.
+        """
+        await self._connection.tcp.crafting_book_data_status(crafting_book_open, crafting_filter)
+
+    async def craft_recipe(self, window: Window, recipe_id: int, make_all: bool = False) -> None:
+        """
+        Request to craft a recipe from the recipe book.
+
+        Sends a craft recipe request packet to the server to craft items using
+        a known recipe. This is equivalent to clicking on a recipe in the recipe book.
+
+        Parameters
+        ----------
+        window: Window
+            The crafting window object that contains the crafting interface.
+            Must be a valid crafting table or player inventory crafting area.
+        recipe_id: int
+            The recipe ID to craft. Must correspond to a valid recipe in the
+            server's recipe registry.
+        make_all: bool
+            Whether to craft as many items as possible (shift-click behavior).
+            When True, crafts the maximum number of items possible with available materials.
+        """
+        await self._connection.tcp.craft_recipe_request(window.id, recipe_id, make_all)
+
+    async def enchant_item(self, window: Window, enchantment: int) -> None:
+        """
+        Request to enchant an item using the enchantment table.
+
+        Sends an enchant item packet to apply the selected enchantment to an item
+        in the enchantment table. Requires the player to have sufficient experience
+        and lapis lazuli.
+
+        Parameters
+        ----------
+        window: Window
+            The enchantment table window object. Must be a valid enchantment table
+            interface with an item placed in the enchantment slot.
+        enchantment: int
+            The position of the enchantment option in the enchantment table interface.
+            Valid values are 0, 1, or 2 (top, middle, bottom enchantment options).
+        """
+        await self._connection.tcp.enchant_item(window.id, enchantment)
+
+    async def click_window_slot(self, window: Window, slot: int, button: int, mode: int) -> None:
+        """
+        Perform a raw click operation on a window slot.
+
+        This is the low-level method for all window interactions. Different combinations
+        of button and mode parameters create different click behaviors (left click,
+        right click, shift click, etc.).
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to click.
+        slot: int
+            The slot number to click. Slot numbering starts at 0 and varies by window type.
+        button: int
+            The mouse button used for the click. 0=left, 1=right, 2=middle.
+        mode: int
+            The inventory operation mode. Different modes enable different behaviors:
+            0=normal click, 1=shift click, 2=number key, 3=middle click, 4=drop, 5=drag, 6=double click.
+
+        Notes
+        -----
+        Most users should prefer the higher-level methods like pickup_item() or place_item()
+        instead of calling this directly.
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, button, action_number, mode, clicked_item)
+
+    async def drop_item(self, window: Window, slot: int, drop_stack: bool = False) -> None:
+        """
+        Drop an item from a window slot onto the ground.
+
+        Removes an item from the specified slot and drops it as an item entity
+        in the world near the player. Uses the drop operation mode (4).
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to drop from.
+        slot: int
+            The slot number to drop items from. Must contain an item to drop.
+        drop_stack: bool
+            Whether to drop the entire stack or just one item.
+            When True, drops all items in the slot. When False, drops only one item.
+        """
+        button = 1 if drop_stack else 0
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, button, action_number, 4, clicked_item)
+
+    async def pickup_item(self, window: Window, slot: int) -> None:
+        """
+        Pick up an item from a window slot (left click).
+
+        Performs a left-click operation on the specified slot to pick up the item.
+        If the cursor already holds an item, this will attempt to merge stacks.
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to pick up from.
+        slot: int
+            The slot number to pick up from. Must contain an item to pick up.
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, 0, action_number, 0, clicked_item)
+
+    async def place_item(self, window: Window, slot: int, single_item: bool = False) -> None:
+        """
+        Place an item in a window slot.
+
+        Places the item currently held by the cursor into the specified slot.
+        Can place either a single item or the entire stack.
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to place into.
+        slot: int
+            The slot number to place the item in.
+        single_item: bool
+            Whether to place only one item (right-click) or the entire stack (left-click).
+            When True, places only one item. When False, places the entire stack.
+        """
+        button = 1 if single_item else 0
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, button, action_number, 0, clicked_item)
+
+    async def shift_click_item(self, window: Window, slot: int) -> None:
+        """
+        Shift-click an item for quick transfer.
+
+        Performs a shift-click operation to quickly move items between inventory
+        sections (e.g., from chest to player inventory or vice versa).
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to shift-click.
+        slot: int
+            The slot number to shift-click. Must contain an item to transfer.
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, 0, action_number, 1, clicked_item)
+
+    async def hotbar_swap(self, window: Window, slot: int, hotbar_key: int) -> None:
+        """
+        Swap item with hotbar using number keys 1-9.
+
+        Swaps the item in the specified slot with the item in the corresponding
+        hotbar slot. This mimics pressing number keys 1-9 while hovering over a slot.
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to swap with.
+        slot: int
+            The slot number to swap with the hotbar.
+        hotbar_key: int
+            The hotbar key (0-8, corresponding to keys 1-9).
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, hotbar_key, action_number, 2, clicked_item)
+
+    async def middle_click_item(self, window: Window, slot: int) -> None:
+        """
+        Middle-click an item (creative mode only).
+
+        Performs a middle-click operation on the specified slot. This is only
+        functional in creative mode and typically duplicates the item.
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to middle-click.
+        slot: int
+            The slot number to middle-click.
+
+        Notes
+        -----
+        Only works in creative mode and in non-player inventories.
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, 2, action_number, 3, clicked_item)
+
+    async def double_click_item(self, window: Window, slot: int) -> None:
+        """
+        Double-click to collect similar items.
+
+        Performs a double-click operation to gather all similar items from the
+        inventory into the clicked slot's stack.
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to double-click.
+        slot: int
+            The slot number to double-click. Should contain the item type to collect.
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, 0, action_number, 6, clicked_item)
+
+    async def click_outside_window(self, window: Window, right_click: bool = False) -> None:
+        """
+        Click outside window to drop held item.
+
+        Drops the item currently held by the cursor by clicking outside the window area.
+        The item will be dropped as an entity in the world.
+
+        Parameters
+        ----------
+        window: Window
+            The window object to click outside-of.
+        right_click: bool
+            Whether to perform a right-click or left-click outside the window.
+        """
+        button = 1 if right_click else 0
+        action_number = window.get_next_action_number()
+        await self._connection.tcp.click_window(window.id, -999, button, action_number, 4, None)
+
+    async def start_drag(self, window: Window, drag_type: int = 0) -> None:
+        """
+        Start a drag operation.
+
+        Initiates a drag operation for distributing items across multiple slots.
+        A drag operation allows you to spread items from a stack evenly across
+        multiple slots by clicking and dragging over them. For example, dragging
+        a stack of 64 items over 4 slots will place 16 items in each slot.
+
+        Must be followed by add_drag_slot() calls and end_drag().
+
+        Parameters
+        ----------
+        window: Window
+            The window object to start dragging in.
+        drag_type: int
+            The type of drag operation:
+            - 0: Left drag (distributes entire stack evenly)
+            - 4: Right drag (places one item per slot)
+            - 8: Middle drag (creative mode only, duplicates items)
+        """
+        action_number = window.get_next_action_number()
+        await self._connection.tcp.click_window(window.id, -999, drag_type, action_number, 5, None)
+
+    async def add_drag_slot(self, window: Window, slot: int, drag_type: int = 1) -> None:
+        """
+        Add slot to drag operation.
+
+        Adds a slot to the current drag operation. Must be called between
+        start_drag() and end_drag().
+
+        Parameters
+        ----------
+        window: Window
+            The window object containing the slot to add.
+        slot: int
+            The slot number to add to the drag operation.
+        drag_type: int
+            The drag operation type. 1=left drag, 5=right drag, 9=middle drag.
+        """
+        action_number = window.get_next_action_number()
+        clicked_item = window.slots[slot].item if 0 <= slot < len(window.slots) else None
+        await self._connection.tcp.click_window(window.id, slot, drag_type, action_number, 5, clicked_item)
+
+    async def end_drag(self, window: Window, drag_type: int = 2) -> None:
+        """
+        End drag operation.
+
+        Completes the drag operation and distributes items to all slots that
+        were added with add_drag_slot().
+
+        Parameters
+        ----------
+        window: Window
+            The window object to end dragging in.
+        drag_type: int
+            The drag operation type. 2=left drag, 6=right drag, 10=middle drag.
+        """
+        action_number = window.get_next_action_number()
+        await self._connection.tcp.click_window(window.id, -999, drag_type, action_number, 5, None)
+
+    async def drag_distribute_items(self, window: Window, slots: list[int], drag_type: int = 0) -> None:
+        """
+        Distribute items across multiple slots using drag.
+
+        Performs a complete drag operation to distribute the held item stack
+        across the specified slots. This is a convenience method that combines
+        start_drag(), add_drag_slot(), and end_drag().
+
+        Parameters
+        ----------
+        window: Window
+            The window object to perform the drag operation in.
+        slots: list[int]
+            List of slot numbers to distribute items to.
+        drag_type: int
+            The drag operation type. 0=left drag, 4=right drag, 8=middle drag.
+        """
+        await self.start_drag(window, drag_type)
+
+        add_type = drag_type + 1
+        for slot in slots:
+            await self.add_drag_slot(window, slot, add_type)
+
+        end_type = drag_type + 2
+        await self.end_drag(window, end_type)
+
+    async def close_window(self, window: Window) -> None:
+        """
+        Close a window.
+
+        Sends a close window packet to the server to close the specified window.
+        Any items in the window will be handled according to the window type.
+
+        Parameters
+        ----------
+        window: Window
+            The window object to close.
+
+        Notes
+        -----
+        Clients send window ID 0 to close their inventory even though there's
+        never an Open Window packet for the inventory.
+        """
+        await self._connection.tcp.close_window(window.id)
+
+    async def set_creative_item(self, slot: int, item: Item) -> None:
+        """
+        Set an item in creative mode inventory slot.
+
+        Places an item directly into the specified creative mode inventory slot.
+        This bypasses normal inventory rules and can create items from nothing.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to set the item in.
+        item: Item
+            The item object to place in the slot.
+        """
+        await self._connection.tcp.creative_inventory_action(slot, item.to_dict())
+
+    async def clear_creative_slot(self, slot: int) -> None:
+        """
+        Clear an item from creative mode inventory slot.
+
+        Removes an item from the specified creative mode inventory slot.
+        The item is permanently deleted.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to clear.
+        """
+        await self._connection.tcp.creative_inventory_action(slot, None)
+
+    async def drop_creative_item(self, item: Item) -> None:
+        """
+        Drop an item from creative inventory into the world.
+
+        Spawns an item entity in the world near the player without removing
+        it from any inventory slot. Creates the item from nothing.
+
+        Parameters
+        ----------
+        item: Item
+            The item object to drop/spawn in the world.
+        """
+        await self._connection.tcp.creative_inventory_action(-1, item.to_dict())
+
+    async def creative_inventory_set(self, slot: int, item: Item) -> None:
+        """
+        Set an item in creative inventory slot.
+
+        Low-level method for placing items directly into creative mode inventory slots.
+        This bypasses normal inventory rules and can create items from nothing.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to set the item in.
+            Use -1 to drop an item outside the inventory.
+        item: Item
+            The item object to place in the slot.
+        """
+        await self._connection.tcp.creative_inventory_action(slot, item.to_dict())
+
+    async def creative_inventory_clear(self, slot: int) -> None:
+        """
+        Clear an item from creative inventory slot.
+
+        Low-level method for removing items from creative mode inventory slots.
+        The item is permanently deleted from the slot.
+
+        Parameters
+        ----------
+        slot: int
+            The inventory slot number to clear.
+        """
+        await self._connection.tcp.creative_inventory_action(slot, None)
 
     def event(self, coro: Callable[..., Any], /) -> None:
         """
@@ -624,7 +1063,7 @@ class Client:
 
     def _get_state(self, username: str) -> ConnectionState:
         """Create and return a connection state object."""
-        return ConnectionState(username=username, dispatcher=self.dispatch, ready=self._handle_ready)
+        return ConnectionState(username=username, tcp=self.tcp, dispatcher=self.dispatch, ready=self._handle_ready)
 
     async def _async_loop(self) -> None:
         """Initialize the asynchronous event loop for managing client operations."""

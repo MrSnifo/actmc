@@ -26,14 +26,14 @@ from __future__ import annotations
 
 from .errors import ProtocolError, PacketError
 from typing import TYPE_CHECKING
-from .tcp import TcpClient
 from . import protocol
 import asyncio
 import zlib
 
 if TYPE_CHECKING:
-    from typing import Self, Tuple, Optional
     from .state import ConnectionState
+    from typing import Self, Tuple
+    from .client import Client
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -42,21 +42,21 @@ _logger = logging.getLogger(__name__)
 class MinecraftSocket:
     """Minecraft protocol socket implementation with packet handling."""
 
-    __slots__ = ('_reader', '_state', 'phase')
-
-    def __init__(self, reader: asyncio.StreamReader, state: ConnectionState) -> None:
-        self._reader: asyncio.StreamReader = reader
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, state: ConnectionState) -> None:
+        self.__reader: asyncio.StreamReader = reader
+        self.__writer: asyncio.StreamWriter = writer
         self._state: ConnectionState = state
         self.phase: int = 0
 
     @classmethod
-    async def initialize_socket(cls, host: str, port: int, state: ConnectionState) -> Self:
+    async def initialize_socket(cls, client: Client, host: str, port: int, state: ConnectionState) -> Self:
         """Factory method to create and initialize a socket connection."""
         _logger.debug("Attempting to establish socket connection to %s:%s", host, port)
-        state.tcp = await TcpClient.connect(host, port)
-        gateway = cls(state.tcp.reader, state=state)
+        reader, writer = await client.tcp.open_connection(host, port)
+        client.tcp._writer = writer
+        gateway = cls(reader=reader, writer=writer, state=state)
         _logger.debug("Socket connection established successfully")
-        await state.send_initial_packets()
+        await state.send_initial_packets(host, port)
         return gateway
 
     async def _read_varint_async(self) -> int:
@@ -64,7 +64,7 @@ class MinecraftSocket:
         data = bytearray()
 
         for _ in range(5):
-            byte = await self._reader.readexactly(1)
+            byte = await self.__reader.readexactly(1)
             data.append(byte[0])
 
             if not (byte[0] & 0x80):
@@ -102,7 +102,8 @@ class MinecraftSocket:
     async def read_packet(self) -> Tuple[int, bytes]:
         """Read and parse a complete Minecraft protocol packet."""
         packet_length = await self._read_varint_async()
-        body = await self._reader.readexactly(packet_length)
+        # Direct access to cached StreamReader
+        body = await self.__reader.readexactly(packet_length)
         body = self._decompress_payload(body)
         buffer = protocol.ProtocolBuffer(body)
         packet_id = protocol.read_varint(buffer)
@@ -113,7 +114,7 @@ class MinecraftSocket:
         """Poll for and handle incoming packets."""
         packet_id, data = await self.read_packet()
         buffer = protocol.ProtocolBuffer(data)
-        _logger.trace(f"Processing packet ID 0x{packet_id:02X}") # type: ignore
+        _logger.trace(f"Processing packet ID 0x{packet_id:02X}")  # type: ignore
 
         if packet_id == 0x1F:
             await self._handle_keep_alive(buffer)
@@ -150,11 +151,13 @@ class MinecraftSocket:
         _logger.debug(f"Login successful for player {self._state.username} (UUID: {self._state.uid})")
 
     async def close(self) -> None:
-        """Close the socket connection gracefully."""
-        if self._state.tcp:
-            await self._state.tcp.close()
-
-    @property
-    def is_connected(self) -> bool:
-        """Check if the socket is connected."""
-        return self._state.tcp and not self._state.tcp.is_closed
+        """Close the socket connection and clean up resources."""
+        if self.__writer and not self.__writer.is_closing():
+            try:
+                self.__writer.close()
+                await self.__writer.wait_closed()
+                _logger.debug("Socket connection closed successfully")
+            except Exception as e:
+                _logger.warning(f"Error while closing socket: {e}")
+        # Reset phase.
+        self.phase = 0

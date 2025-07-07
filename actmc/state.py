@@ -35,7 +35,7 @@ from .utils import position_to_chunk_relative
 from .entities import BLOCK_ENTITY_TYPES, MOB_ENTITY_TYPES, OBJECT_ENTITY_TYPES
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, Optional, Set
+    from typing import Any, Callable, Dict, Optional, Set, ClassVar
     from .tcp import TcpClient
 
 import logging
@@ -45,11 +45,11 @@ __all__ = ('ConnectionState',)
 
 
 class ConnectionState:
-    _packet_parsers: Dict[int, str] = {}
+    _packet_parsers: ClassVar[Dict[int, str]] = {}
 
-    def __init__(self, username: str, dispatcher: Callable[..., Any], ready: Callable[..., None]) -> None:
+    def __init__(self, username: str, tcp: TcpClient, dispatcher: Callable[..., Any], ready: Callable[..., None]) -> None:
         # Network and dispatcher
-        self.tcp: Optional[TcpClient] = None
+        self.tcp: TcpClient = tcp
         self._dispatch = dispatcher
         self._load_chunks = True
 
@@ -89,7 +89,6 @@ class ConnectionState:
     def clear(self) -> None:
         """Clear all connection state data."""
         self._ready_called = False
-        self.tcp = None
 
         # Cancel any ongoing chunk loading tasks
         for task in self._chunk_tasks:
@@ -114,6 +113,7 @@ class ConnectionState:
         self.boss_bars.clear()
         self.scoreboard_objectives.clear()
         self.action_bar = actionbar.Title()
+
 
     @classmethod
     def _build_parser_cache(cls) -> None:
@@ -183,36 +183,8 @@ class ConnectionState:
             current_task = asyncio.current_task()
             self._chunk_tasks.discard(current_task)
 
-    # Client methods
-    async def send_client_status(self, action_id: int) -> None:
-        await self.tcp.client_status(action_id)
-
-    async def send_client_settings(self, locale: str, view_distance: int, chat_mode: int, chat_colors: bool,
-                                   cape: bool, jacket: bool, left_sleeve: bool, right_sleeve: bool, left_pants: bool,
-                                   right_pants: bool, hat: bool, main_hand: int) -> None:
-        skin_parts = (cape << 0) | (jacket << 1) | (left_sleeve << 2) | (right_sleeve << 3) | (left_pants << 4) | (
-                    right_pants << 5) | (hat << 6)
-        await self.tcp.client_settings(locale, view_distance, chat_mode, chat_colors, skin_parts, main_hand)
-
-    async def open_advancement_tab(self, tab_id: str) -> None:
-        await self.tcp.advancement_tab(0, tab_id)
-
-    async def close_advancement_tab(self) -> None:
-        await self.tcp.advancement_tab(1)
-
-    async def set_resource_pack_status(self, result: int) -> None:
-        await self.tcp.resource_pack_status(result)
-
-    async def send_chat_message(self, message: str) -> None:
-        await self.tcp.chat_message(message)
-
-    async def request_chat_command_suggestion(self, text: str, assume_command: bool, has_position: bool,
-                                              looked_at_block: Optional[math.Vector3D[int]]) -> None:
-        """Send tab-complete request for command or chat suggestions."""
-        await self.tcp.chat_command_suggestion(text, assume_command, has_position, looked_at_block)
-
-    async def send_initial_packets(self) -> None:
-        await self.tcp.handshake_packet()
+    async def send_initial_packets(self, host: str, port: int) -> None:
+        await self.tcp.handshake_packet(host, port)
         await self.tcp.login_packet(self._username)
         self._dispatch('handshake')
 
@@ -1547,17 +1519,12 @@ class ConnectionState:
             progress[advancement_id] = advancement_progress
 
         advancements_data = advancement.AdvancementsData(reset_clear, advancements, removed_advancements, progress)
-
-        self._dispatch('advancements_update', advancements_data)
-    async def parse_0x57(self, buffer: protocol.ProtocolBuffer) -> None:
-        reset = protocol.read_bool(buffer)
-        advancement_count = protocol.read_varint(buffer)
-        self._dispatch('advancements', reset, advancement_count, buffer.getvalue())
+        self._dispatch('advancements', advancements_data)
 
     async def parse_0x37(self, buffer: protocol.ProtocolBuffer) -> None:
         has_id = protocol.read_bool(buffer)
         identifier = protocol.read_string(buffer) if has_id else None
-        self._dispatch('select_advancement_tab', identifier)
+        self._dispatch('switch_advancement_tab', identifier)
 
 
 

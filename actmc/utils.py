@@ -26,13 +26,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from . import math
+import time
 
 if TYPE_CHECKING:
     from typing import Optional, Tuple
 
 import logging
 
-__all__ = ('position_to_chunk_relative', 'calculate_block_face', 'setup_logging')
+__all__ = ('position_to_chunk_relative', 'calculate_block_face', 'ExponentialBackoff', 'setup_logging')
 
 def position_to_chunk_relative(position: math.Vector3D[int]) -> Tuple[math.Vector2D[int], math.Vector3D[int], int]:
     """
@@ -109,6 +110,52 @@ def calculate_block_face(player: math.Vector3D[float], block: math.Vector3D[int]
     else:
         return 2 if dz < 0 else 3
 
+
+class ExponentialBackoff:
+    """
+    Handles retry intervals with exponential backoff.
+
+    Parameters
+    ----------
+    base_delay: int
+        The initial delay in seconds. The delay starts at this value and increases
+        exponentially with each retry.
+    max_delay: int
+        The maximum delay between retries. The exponential increase is capped
+        at this value.
+    reset_interval: int
+        The period in seconds after which the retry count is reset if no errors occur.
+    """
+
+    __slots__ = ('base_delay', 'max_delay', 'reset_interval', 'retry_count', 'last_failure_time')
+
+    def __init__(self, base_delay: int = 1, max_delay: int = 180, reset_interval: int = 300) -> None:
+        self.base_delay: int = base_delay
+        self.max_delay: int = max_delay
+        self.reset_interval: int = reset_interval
+        self.retry_count: int = 0
+        self.last_failure_time: float = time.monotonic()
+
+    def get_delay(self) -> int:
+        """
+
+        Determine the delay before the next retry attempt.
+
+        Returns
+        -------
+        int
+            The delay in seconds before the next retry attempt.
+        """
+        current_time = time.monotonic()
+        elapsed_time = current_time - self.last_failure_time
+
+        if elapsed_time > self.reset_interval:
+            self.retry_count = 0
+
+        delay = min(self.base_delay * 2 ** self.retry_count, self.max_delay)
+        self.retry_count += 1
+        self.last_failure_time = current_time
+        return delay
 
 LOGGER_TRACE: int = 5
 logging.addLevelName(LOGGER_TRACE, 'TRACE')

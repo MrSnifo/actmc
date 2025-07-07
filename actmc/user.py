@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING, overload
 from .entities.entity import BaseEntity
 from .math import Vector3D, Rotation
 from .entities.player import Player
-from .window import UserWindow
 
 if TYPE_CHECKING:
     from typing import Literal, Dict, ClassVar, Optional
@@ -43,7 +42,7 @@ class User(Player):
     Note: use hasattr to make sure that data....
 
     """
-    __slots__ = ('_state', '_window', 'username', 'gamemode', 'dimension',
+    __slots__ = ('_state', 'username', 'gamemode', 'dimension',
                  'health', 'food', 'food_saturation',
                  'level', 'total_experience', 'experience_bar',
                  'held_slot',
@@ -96,19 +95,11 @@ class User(Player):
         super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {},
                          state.tablist)
         self._state: ConnectionState = state
-        self._window: Optional[UserWindow] = None
         self._update(username, uuid)
 
     def _update(self, username: str, uuid: str) -> None:
         self.username = username
         self.uuid = uuid
-
-    @property
-    def window(self) -> UserWindow:
-        """Get the window manager for this user"""
-        if self._window is None:
-            self._window = UserWindow(self._state)
-        return self._window
 
     @property
     def inventory(self) -> Optional[gui.Window]:

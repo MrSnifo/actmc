@@ -31,14 +31,12 @@ import asyncio
 import zlib
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Optional, Coroutine, Any
-    from asyncio import StreamReader, StreamWriter
+    from typing import ClassVar, Optional, Coroutine, Any, Tuple
     from .entities import misc
     from . import math
 
 import logging
 _logger = logging.getLogger(__name__)
-
 
 class TcpClient:
     """TCP connection handler for Minecraft protocol communication."""
@@ -47,50 +45,28 @@ class TcpClient:
     PROTOCOL_VERSION: ClassVar[int] = 340
     COMPRESSION_THRESHOLD_DEFAULT: ClassVar[int] = -1
 
-    def __init__(self, host: str, port: int, reader: StreamReader, writer: StreamWriter) -> None:
-        self.host: str = host
-        self.port: int = port
-        self._reader = reader
-        self._writer = writer
-        self._closed = False
+    if TYPE_CHECKING:
+        _writer: asyncio.StreamWriter
+
+    def __init__(self) -> None:
         self.compression_threshold = self.COMPRESSION_THRESHOLD_DEFAULT
 
-    @classmethod
-    async def connect(cls, host: str, port: int) -> TcpClient:
+    def clear(self) -> None:
+        self.compression_threshold = self.COMPRESSION_THRESHOLD_DEFAULT
+        if hasattr(self, '_writer'): delattr(self, '_writer')
+
+    async def open_connection(self, host: str, port: int) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         """Create and initialize a socket connection."""
-        reader, writer = await asyncio.open_connection(host=host, port=port, limit=cls.DEFAULT_LIMIT)
+        reader, writer = await asyncio.open_connection(host=host, port=port, limit=self.DEFAULT_LIMIT)
         _logger.debug(f"Connection established to {host}:{port}")
-        return cls(host, port, reader, writer)
+        return reader, writer
 
     @property
-    def reader(self) -> StreamReader:
-        """Get the stream reader."""
-        if self._closed:
-            raise ConnectionClosed("Connection is closed")
-        return self._reader
-
-    @property
-    def writer(self) -> StreamWriter:
+    def writer(self) -> asyncio.StreamWriter:
         """Get the stream writer."""
-        if self._closed:
+        if not hasattr(self, '_writer') and not self._writer.is_closing():
             raise ConnectionClosed("Connection is closed")
         return self._writer
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if the connection is closed."""
-        return self._closed or self._writer.is_closing()
-
-    async def close(self) -> None:
-        """Close the connection gracefully."""
-        if not self._closed:
-            self._writer.close()
-            try:
-                await asyncio.wait_for(self._writer.wait_closed(), timeout=5.0)
-            except (OSError, asyncio.TimeoutError):
-                pass
-            finally:
-                self._closed = True
 
     def _compress_payload(self, payload: bytes) -> bytes:
         """Compress payload data if compression is enabled."""
@@ -112,9 +88,6 @@ class TcpClient:
 
     async def write_packet(self, packet_id: int, data: protocol.ProtocolBuffer) -> None:
         """Write a complete Minecraft protocol packet."""
-        if self.is_closed:
-            raise ConnectionClosed("Cannot write to closed connection")
-
         try:
             packet_id_bytes = protocol.write_varint(packet_id)
             payload = packet_id_bytes + data.getvalue()
@@ -134,12 +107,12 @@ class TcpClient:
         except Exception as e:
             raise PacketError(f"Unexpected error writing packet 0x{packet_id:02X}: {e}") from e
 
-    def handshake_packet(self, next_state: int = 2) -> Coroutine[Any, Any, None]:
+    def handshake_packet(self, host: str, port: int, next_state: int = 2) -> Coroutine[Any, Any, None]:
         """Construct the Minecraft handshake packet."""
         buffer = protocol.ProtocolBuffer()
         buffer.write(protocol.write_varint(self.PROTOCOL_VERSION))
-        buffer.write(protocol.pack_string(self.host))
-        buffer.write(protocol.pack_ushort(self.port))
+        buffer.write(protocol.pack_string(host))
+        buffer.write(protocol.pack_ushort(port))
         buffer.write(protocol.write_varint(next_state))
         return self.write_packet(0x00, buffer)
 
