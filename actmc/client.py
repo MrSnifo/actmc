@@ -73,9 +73,6 @@ class Client:
         self._ready: Optional[asyncio.Event] = None
         self._closing_task: Optional[asyncio.Task] = None
 
-    def _handle_ready(self) -> None:
-        self._ready.set()
-
     @property
     def user(self) -> Optional[User]:
         """
@@ -1061,9 +1058,13 @@ class Client:
         except Exception as error:
             _logger.error('Event: %s Error: %s', event, error)
 
+    def _handle_ready(self) -> None:
+        """Signal that the connection is ready."""
+        self._ready.set()
+
     def _get_state(self, username: str) -> ConnectionState:
         """Create and return a connection state object."""
-        return ConnectionState(username=username, tcp=self.tcp, dispatcher=self.dispatch, ready=self._handle_ready)
+        return ConnectionState(username, tcp=self.tcp, dispatcher=self.dispatch, handle_ready=self._handle_ready)
 
     async def _async_loop(self) -> None:
         """Initialize the asynchronous event loop for managing client operations."""

@@ -47,14 +47,15 @@ __all__ = ('ConnectionState',)
 class ConnectionState:
     _packet_parsers: ClassVar[Dict[int, str]] = {}
 
-    def __init__(self, username: str, tcp: TcpClient, dispatcher: Callable[..., Any], ready: Callable[..., None]) -> None:
+    def __init__(self, username: str, tcp: TcpClient, dispatcher: Callable[..., Any],
+                 handle_ready: Callable[..., None]) -> None:
         # Network and dispatcher
         self.tcp: TcpClient = tcp
         self._dispatch = dispatcher
         self._load_chunks = True
 
         # Ready state handling
-        self._ready_callback = ready
+        self._ready_handler = handle_ready
         self._ready_called = False
 
         # Player information
@@ -146,8 +147,8 @@ class ConnectionState:
             return
 
         self._ready_called = True
-        if self._ready_callback:
-            self._ready_callback()
+        if self._ready_handler:
+            self._ready_handler()
 
         self._dispatch('ready')
 
