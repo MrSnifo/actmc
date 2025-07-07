@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .entities import misc
     from . import math
 
+
 import logging
 _logger = logging.getLogger(__name__)
 
