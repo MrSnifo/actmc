@@ -59,7 +59,6 @@ class InvalidDataError(ProtocolError):
     pass
 
 
-# Connection and core exceptions
 class ConnectionClosed(ClientException):
     """Raised when connection to server is closed unexpectedly"""
     pass

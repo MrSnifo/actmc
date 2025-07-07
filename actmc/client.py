@@ -255,16 +255,21 @@ class Client:
         Parameters
         ----------
         host: str
-            The server hostname or IP address.
+           The server hostname or IP address.
         port: int
-            The server port number.
+           The server port number.
 
         Raises
         ------
         ConnectionClosed
-            If the connection is interrupted unexpectedly.
+           If the connection is interrupted unexpectedly.
         ClientException
-            If the client fails to connect.
+           If the client fails to connect.
+
+        Warnings
+        --------
+        Repeated calls to this method without delays may trigger server rate limiting.
+        Implement appropriate delays between connection attempts.
 
         Notes
         -----
@@ -1135,5 +1140,4 @@ class Client:
         **kwargs: Any
             Keyword arguments passed to the event.
         """
-        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id,
-                          args, kwargs)
+        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id, args, kwargs)

@@ -156,8 +156,6 @@ class MinecraftSocket:
             try:
                 self.__writer.close()
                 await self.__writer.wait_closed()
-                _logger.debug("Socket connection closed successfully")
-            except Exception as e:
-                _logger.warning(f"Error while closing socket: {e}")
-        # Reset phase.
+            except (ConnectionError, asyncio.CancelledError):
+                pass
         self.phase = 0
