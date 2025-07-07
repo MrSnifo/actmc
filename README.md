@@ -1,6 +1,7 @@
 # actmc
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![PyPI - Version](https://img.shields.io/pypi/v/actmc?color=%234CAF50)](https://pypi.org/project/actmc)
+[![License: MIT](https://img.shields.io/badge/License-MIT-4CAF50.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 An async Python client for Minecraft 1.12.2 Java Edition servers (offline-mode).
