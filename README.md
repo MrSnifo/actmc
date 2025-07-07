@@ -43,7 +43,7 @@ client = Client(username='MyBot')
 
 @client.event
 async def on_ready():
-    print('Connected as', client.username)
+    print('Connected as', client.user.username)
 
 @client.event
 async def on_system_message(message: chat.Message):
