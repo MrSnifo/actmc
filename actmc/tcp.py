@@ -35,9 +35,10 @@ if TYPE_CHECKING:
     from .entities import misc
     from . import math
 
-
 import logging
 _logger = logging.getLogger(__name__)
+
+__all__ = ('TcpClient',)
 
 class TcpClient:
     """TCP connection handler for Minecraft protocol communication."""

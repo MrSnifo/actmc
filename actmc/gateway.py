@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 import logging
 _logger = logging.getLogger(__name__)
 
+__all__ = ('MinecraftSocket',)
+
 
 class MinecraftSocket:
     """Minecraft protocol socket implementation with packet handling."""

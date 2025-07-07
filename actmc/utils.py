@@ -26,12 +26,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from . import math
+import logging
 import time
 
 if TYPE_CHECKING:
     from typing import Optional, Tuple
-
-import logging
 
 __all__ = ('position_to_chunk_relative', 'calculate_block_face', 'ExponentialBackoff', 'setup_logging')
 

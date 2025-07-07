@@ -36,8 +36,8 @@ if TYPE_CHECKING:
     from typing import Optional, Literal, Any, Callable, Dict, Type
     from .ui.scoreboard import Scoreboard
     from .math import Vector2D, Vector3D
-    from .ui.border import WorldBorder
     from .ui.tablist import PlayerInfo
+    from .ui.border import WorldBorder
     from .ui.actionbar import Title
     from .entities.misc import Item
     from .chunk import Chunk, Block

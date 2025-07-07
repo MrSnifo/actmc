@@ -24,14 +24,16 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
+from .errors import DataTooShortError, InvalidDataError
 import struct
 import json
 import uuid
 import io
 
-from .errors import DataTooShortError, InvalidDataError
-from typing import Union, Optional, Tuple, Dict, List, Any
-from .types import entities, advancement
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from typing import Union, Optional, Tuple, Dict, List, Any
+    from .types import entities, advancement
 
 __all__ = (
     'ProtocolBuffer',
