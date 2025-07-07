@@ -7,7 +7,7 @@ An async Python client for Minecraft 1.12.2 Java Edition servers (offline-mode).
 
 **Key Features**
 * Modern async/await API.
-* Comprehensive protocol support for 1.12.2.
+* Comprehensive protocol support.
 * Optimised in both speed and memory.
 
 **Installing**
