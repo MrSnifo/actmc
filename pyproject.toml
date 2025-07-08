@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "actmc"
 description = "An async Python client for Minecraft 1.12.2 Java Edition servers (offline-mode)"
 readme = "README.md"
-requires-python = ">=3.12.0"
+requires-python = ">=3.12.0,<4.0"
 license = {text = "MIT"}
 authors = [{name = "Snifo", email = "Snifo@mail.com"}]
+keywords = ["bot", "minecraft", "minecraft-protocol", "minecraft-bot"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
@@ -25,7 +26,13 @@ classifiers = [
     "Framework :: AsyncIO",
 ]
 
+dependencies = []
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/mrsnifo/actmc"
+"Issue tracker" = "https://github.com/mrsnifo/actmc/issues"
+Repository = "https://github.com/mrsnifo/actmc"
 
 [tool.setuptools]
 packages = [
@@ -37,10 +44,6 @@ packages = [
 ]
 include-package-data = true
 
-[tool.setuptools_scm]
-# This will automatically use git tags as version numbers
-# For tag 1.12.2.post1, it will use exactly that as the version
-
 [tool.black]
 line-length = 120
 skip-string-normalization = true
@@ -50,8 +53,3 @@ profile = "black"
 combine_as_imports = true
 combine_star = true
 line_length = 120
-
-[project.urls]
-Homepage = "https://github.com/mrsnifo/actmc"
-"Issue tracker" = "https://github.com/mrsnifo/actmc/issues"
-Repository = "https://github.com/mrsnifo/actmc"

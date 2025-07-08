@@ -129,6 +129,22 @@ class ConnectionState:
                 except ValueError:
                     continue
 
+    async def send_initial_packets(self, host: str, port: int) -> None:
+        """Send initial handshake and login packets to establish connection."""
+        await self.tcp.handshake_packet(host, port)
+        await self.tcp.login_packet(self._username)
+        self._dispatch('handshake')
+
+    def get_block_state(self, position: math.Vector3D[int]) -> Optional[Block]:
+        """Get block state at specified world position."""
+        chunk_coords, block_pos, section_y = position_to_chunk_relative(position)
+        chunk = self.chunks.get(chunk_coords)
+        if chunk is None:
+            return None
+
+        section = chunk.get_section(section_y)
+        return section.get_state(block_pos) if section else None
+
     def _check_ready_state(self) -> None:
         """
         Check if all required player data is received and fire ready event.
@@ -155,23 +171,7 @@ class ConnectionState:
 
         self._dispatch('ready')
 
-    async def send_initial_packets(self, host: str, port: int) -> None:
-        """Send initial handshake and login packets to establish connection."""
-        await self.tcp.handshake_packet(host, port)
-        await self.tcp.login_packet(self._username)
-        self._dispatch('handshake')
-
-    def get_block_state(self, position: math.Vector3D[int]) -> Optional[Block]:
-        """Get block state at specified world position."""
-        chunk_coords, block_pos, section_y = position_to_chunk_relative(position)
-        chunk = self.chunks.get(chunk_coords)
-        if chunk is None:
-            return None
-
-        section = chunk.get_section(section_y)
-        return section.get_state(block_pos) if section else None
-
-    def set_block_state(self, state: Block) -> None:
+    def _set_block_state(self, state: Block) -> None:
         """Update block state in loaded chunks."""
         chunk_coords, block_pos, section_y = position_to_chunk_relative(state.position)
         chunk = self.chunks.get(chunk_coords)
@@ -185,7 +185,7 @@ class ConnectionState:
 
         section.set_state(block_pos, state)
 
-    def set_block_entity(self, pos: math.Vector3D[int], block_entity: entities.entity.BaseEntity[str]) -> None:
+    def _set_block_entity(self, pos: math.Vector3D[int], block_entity: entities.entity.BaseEntity[str]) -> None:
         """Set block entity at specified position."""
         chunk_coords, block_pos, section_y = position_to_chunk_relative(pos)
         chunk = self.chunks.get(chunk_coords)
@@ -339,7 +339,6 @@ class ConnectionState:
         chunk_x = protocol.read_int(buffer)
         chunk_z = protocol.read_int(buffer)
         pos = math.Vector2D(chunk_x, chunk_z)
-
         # Remove chunk from memory if loading is enabled
         if self._load_chunks:
             self.chunks.pop(pos, None)
@@ -358,21 +357,19 @@ class ConnectionState:
         """Handle Block Change packet (0x0B) - Single block update"""
         position = protocol.read_position(buffer)
         block_state_id = protocol.read_varint(buffer)
-
         # Extract block type and metadata
         block_type = block_state_id >> 4
         block_meta = block_state_id & 0xF
 
         state = Block(block_type, block_meta, math.Vector3D(*position).to_int())
-
         if self._load_chunks:
-            self.set_block_state(state)
+            self._set_block_state(state)
+
         self._dispatch('block_change', state)
 
     async def parse_0x39(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Camera packet (0x39) - Entity camera focus"""
         camera_entity_id = protocol.read_varint(buffer)
-
         if camera_entity_id in self.entities:
             self._dispatch('camera', self.entities[camera_entity_id])
         else:
@@ -385,7 +382,6 @@ class ConnectionState:
         record_count = protocol.read_varint(buffer)
 
         states = []
-
         for _ in range(record_count):
             horizontal = protocol.read_ubyte(buffer)
             y = protocol.read_ubyte(buffer)
@@ -404,9 +400,8 @@ class ConnectionState:
             block_meta = block_state_id & 0xF
 
             state = Block(block_type, block_meta, math.Vector3D(x, y, z).to_int())
-
             if self._load_chunks:
-                self.set_block_state(state)
+                self._set_block_state(state)
 
             states.append(state)
 
@@ -417,14 +412,12 @@ class ConnectionState:
         bar_uuid = protocol.read_uuid(buffer)
         action = protocol.read_varint(buffer)
         uuid_str = str(bar_uuid)
-
         if action == 0:  # Add
             title = protocol.read_chat(buffer)
             health = protocol.read_float(buffer)
             color = protocol.read_varint(buffer)
             division = protocol.read_varint(buffer)
             flags = protocol.read_ubyte(buffer)
-
             boss_bar = bossbar.BossBar(bar_uuid, title, health, color, division, flags)
             self.boss_bars[uuid_str] = boss_bar
             self._dispatch('boss_bar_add', boss_bar)
@@ -432,7 +425,6 @@ class ConnectionState:
         elif action == 1:  # Remove
             removed_bar = self.boss_bars.pop(uuid_str, None)
             self._dispatch('boss_bar_remove', removed_bar)
-
         else:
             bar = self.boss_bars.get(uuid_str)
             if not bar:
@@ -463,10 +455,9 @@ class ConnectionState:
         # Extract position and entity ID from NBT
         pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z'))
         entity_id = data.pop('id')
-
         block_entity = self._create_block_entity(entity_id, data)
         if self._load_chunks:
-            self.set_block_entity(pos.to_int(), block_entity)
+            self._set_block_entity(pos.to_int(), block_entity)
 
         self._dispatch('block_entity_update', pos, block_entity)
 
@@ -475,7 +466,6 @@ class ConnectionState:
         self.user.health = protocol.read_float(data)
         self.user.food = protocol.read_varint(data)
         self.user.food_saturation = protocol.read_float(data)
-
         self._check_ready_state()
         self._dispatch('player_health_update', self.user.health, self.user.food, self.user.food_saturation)
 
@@ -484,7 +474,6 @@ class ConnectionState:
         self.user.experience_bar = protocol.read_float(data)
         self.user.level = protocol.read_varint(data)
         self.user.total_experience = protocol.read_varint(data)
-
         self._check_ready_state()
         self._dispatch('player_experience_set', self.user.level, self.user.total_experience, self.user.experience_bar)
 
@@ -494,7 +483,6 @@ class ConnectionState:
         location = protocol.read_position(buffer)
         data = protocol.read_int(buffer)
         disable_relative_volume = protocol.read_bool(buffer)
-
         self._dispatch('effect', effect_id, location, data, disable_relative_volume)
 
     async def parse_0x3a(self, data: protocol.ProtocolBuffer) -> None:
@@ -507,10 +495,8 @@ class ConnectionState:
         """Handle Change Game State packet (0x1E) - Game mode/state changes"""
         reason = protocol.read_ubyte(data)
         value = protocol.read_float(data)
-
         if reason == 3:
             self.user.gamemode =int(value)
-
         self._dispatch('game_state_change', reason, value)
 
     async def parse_0x2f(self, data: protocol.ProtocolBuffer) -> None:
@@ -537,7 +523,7 @@ class ConnectionState:
 
         self.user.position = math.Vector3D(x, y, z)
         self.user.rotation = math.Rotation(yaw, pitch)
-
+        # By default, the client automatically confirm teleportation.
         await self.tcp.player_teleport_confirmation(teleport_id)
         self._dispatch('player_position_and_look', self.user.position, self.user.rotation)
 
@@ -561,7 +547,6 @@ class ConnectionState:
 
         position = math.Vector3D(x, y, z)
         offset = math.Vector3D(offset_x, offset_y, offset_z)
-
         self._dispatch('particle', particle_id, long_distance, position, offset,
                        particle_data, particle_count, data_array)
 
@@ -588,12 +573,9 @@ class ConnectionState:
             })
 
         columns = protocol.read_byte(data)
-
-        # Optional fields only if columns > 0
         rows = None
         offset = None
         map_data = None
-
         if columns > 0:
             rows = protocol.read_byte(data)
             x_offset = protocol.read_byte(data)
@@ -624,13 +606,11 @@ class ConnectionState:
         self.difficulty = difficulty
         self.user.gamemode = gamemode
         self.world_type = level_type
-
         self._dispatch('respawn', dimension, difficulty, gamemode, level_type)
 
     async def parse_0x25(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Keep Alive packet (0x25)"""
         entity_id = protocol.read_varint(buffer)
-
         if entity_id in self.entities:
             self._dispatch('entity_keep_alive', self.entities[entity_id])
         else:
@@ -644,40 +624,34 @@ class ConnectionState:
     async def parse_0x2d(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Combat Event packet (0x2D)"""
         event = protocol.read_varint(buffer)
-
         if event == 0:
             self._dispatch('enter_combat')
         elif event == 1:
             duration = protocol.read_varint(buffer)
             entity_id = protocol.read_int(buffer)
             entity = self.entities.get(entity_id)
-
             if not entity:
                 _logger.warning(f"Combat ended for untracked entity ID: %s", entity_id)
                 return
-
             self._dispatch('end_combat', entity, duration)
         elif event == 2:
             player_id = protocol.read_varint(buffer)
             entity_id = protocol.read_int(buffer)
             message = protocol.read_chat(buffer)
-
             player = self.entities.get(player_id)
             entity = self.entities.get(entity_id)
-
             if not player:
                 _logger.warning(f"Entity death for untracked player ID: %s", player_id)
                 return
 
-            if entity_id == -1:  # system or environmental death
-                self._dispatch('player_death', player, None, Message(message))
-                return
+            if entity_id == -1:
+                self._dispatch('player_death', player, Message(message))
 
             if not entity:
-                _logger.warning(f"Entity death for untracked entity ID: %s", entity_id)
+                if entity_id != -1:
+                    _logger.warning(f"Entity death for untracked entity ID: %s", entity_id)
                 return
-
-            self._dispatch('player_death', player, entity, Message(message))
+            self._dispatch('player_killed', player, entity, Message(message))
 
     async def parse_0x18(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Plugin Message packet (0x18) - Custom plugin messages"""
@@ -696,26 +670,23 @@ class ConnectionState:
 
         volume = protocol.read_float(buffer)
         pitch = protocol.read_float(buffer)
-
         self._dispatch('named_sound_effect', sound_name, sound_category, position, volume, pitch)
 
     async def parse_0x07(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Statistics packet (0x07) - Player stats"""
         count = protocol.read_varint(buffer)
-        statistics = []
 
+        statistics = []
         for _ in range(count):
             name = protocol.read_string(buffer)
             value = protocol.read_varint(buffer)
             statistics.append((name, value))
-
         self._dispatch('statistics', statistics)
 
     async def parse_0x06(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Animation packet (0x06) - Entity animations"""
         entity_id = protocol.read_varint(buffer)
         animation_id = protocol.read_ubyte(buffer)
-
         if entity_id in self.entities:
             entity = self.entities[entity_id]
             self._dispatch('entity_animation', entity, animation_id)
@@ -725,7 +696,6 @@ class ConnectionState:
         entity_id = protocol.read_varint(buffer)
         location = protocol.read_position(buffer)
         destroy_stage = protocol.read_byte(buffer)
-
         if entity_id in self.entities:
             entity = self.entities[entity_id]
             self._dispatch('block_break_animation', entity, location, destroy_stage)
@@ -734,7 +704,6 @@ class ConnectionState:
         """Handle Craft Recipe Response packet (0x2B)"""
         window_id = protocol.read_byte(data)
         recipe = protocol.read_varint(data)
-
         if window_id in self.windows:
             window = self.windows[window_id]
             self._dispatch('craft_recipe_response', window, recipe)
@@ -747,7 +716,6 @@ class ConnectionState:
         number_of_players = protocol.read_varint(buffer)
 
         players_affected = []
-
         for _ in range(number_of_players):
             player_uuid = protocol.read_uuid(buffer)
             uuid_str = str(player_uuid)
@@ -875,7 +843,6 @@ class ConnectionState:
         yaw = protocol.read_angle(buffer)
         pitch = protocol.read_angle(buffer)
         on_ground = protocol.read_bool(buffer)
-
         if entity_id in self.entities:
             self.entities[entity_id].position = math.Vector3D(x, y, z)
             self.entities[entity_id].rotation = math.Rotation(yaw, pitch)
@@ -897,9 +864,7 @@ class ConnectionState:
         delta_y = protocol.read_short(buffer)
         delta_z = protocol.read_short(buffer)
         on_ground = protocol.read_bool(buffer)
-
         delta = math.Vector3D(delta_x / 4096.0, delta_y / 4096.0, delta_z / 4096.0)
-
         if entity_id in self.entities:
             entity = self.entities[entity_id]
             current_pos = entity.position
@@ -937,10 +902,8 @@ class ConnectionState:
             new_x = current_pos.x + delta.x
             new_y = current_pos.y + delta.y
             new_z = current_pos.z + delta.z
-
             entity.position = math.Vector3D(new_x, new_y, new_z)
             entity.rotation = math.Rotation(yaw, pitch)
-
             self._dispatch('entity_move_look', entity, delta, on_ground)
 
     async def parse_0x28(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -949,7 +912,6 @@ class ConnectionState:
         yaw = protocol.read_angle(buffer)
         pitch = protocol.read_angle(buffer)
         on_ground = protocol.read_bool(buffer)
-
         if entity_id in self.entities:
             entity = self.entities[entity_id]
             entity.rotation = math.Rotation(yaw, pitch)
@@ -959,7 +921,6 @@ class ConnectionState:
         """Handle Entity Head Look packet (0x36)"""
         entity_id = protocol.read_varint(buffer)
         head_yaw = protocol.read_angle(buffer)
-
         # Update entity if it exists
         if entity_id in self.entities:
             entity = self.entities[entity_id]
@@ -982,7 +943,6 @@ class ConnectionState:
         v_y = protocol.read_short(buffer)
         v_z = protocol.read_short(buffer)
         metadata = protocol.read_entity_metadata(buffer)
-
         mob_entity = self._create_mob_entity(mob_type, entity_id, entity_uuid, math.Vector3D(x, y, z),
                                              math.Rotation(yaw, pitch), metadata)
         self.entities[entity_id] = mob_entity
@@ -995,7 +955,6 @@ class ConnectionState:
         v_x = protocol.read_short(buffer) / 8000.0 * 20
         v_y = protocol.read_short(buffer) / 8000.0 * 20
         v_z = protocol.read_short(buffer) / 8000.0 * 20
-
         if entity_id in self.entities:
             self._dispatch('entity_velocity', self.entities[entity_id],  math.Vector3D(v_x, v_y, v_z))
 
@@ -1003,7 +962,6 @@ class ConnectionState:
         """Handle Entity Metadata packet (0x3C)"""
         entity_id = protocol.read_varint(buffer)
         metadata = protocol.read_entity_metadata(buffer)
-
         if entity_id in self.entities:
             entity = self.entities[entity_id]
             entity.update_metadata(metadata)
@@ -1020,10 +978,10 @@ class ConnectionState:
         entity_id = protocol.read_varint(buffer)
         slot_index = protocol.read_varint(buffer)
         item_data = protocol.read_slot(buffer)
-
         if entity_id in self.entities:
             entity = self.entities[entity_id]
 
+            # Only Living entity with slots for equipments.
             if not isinstance(entity, entities.entity.Living):
                 _logger.debug(f"Entity {entity_id} is not a Living entity, skipping equipment")
                 return
@@ -1046,7 +1004,6 @@ class ConnectionState:
         count = protocol.read_varint(buffer)
         entity_ids = [protocol.read_varint(buffer) for _ in range(count)]
         destroyed = {eid: self.entities.pop(eid, None) for eid in entity_ids if eid in self.entities}
-
         if destroyed:
             self._dispatch('destroy_entities', list(destroyed.values()))
 
@@ -1054,7 +1011,6 @@ class ConnectionState:
         """Handle Entity Status packet (0x1B)"""
         entity_id = protocol.read_int(buffer)
         status = protocol.read_byte(buffer)
-
         if entity_id in self.entities:
             self._dispatch('entity_status', self.entities[entity_id], status)
         else:
@@ -1066,18 +1022,14 @@ class ConnectionState:
         y = protocol.read_float(buffer)
         z = protocol.read_float(buffer)
         position = math.Vector3D(x, y, z)
-
         radius = protocol.read_float(buffer)
-
         record_count = protocol.read_int(buffer)
         records = [(protocol.read_byte(buffer), protocol.read_byte(buffer),
                     protocol.read_byte(buffer)) for _ in range(record_count)]
-
         motion_x = protocol.read_float(buffer)
         motion_y = protocol.read_float(buffer)
         motion_z = protocol.read_float(buffer)
         player_motion = math.Vector3D(motion_x, motion_y, motion_z)
-
         self._dispatch('explosion', position,radius, records, player_motion)
 
     async def parse_0x00(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1091,11 +1043,10 @@ class ConnectionState:
         pitch = protocol.read_angle(buffer)
         yaw = protocol.read_angle(buffer)
         data = protocol.read_int(buffer)
-        # 20 ticks.
+        # 20 ticks * 8000.
         vel_x = protocol.read_short(buffer) / 8000.0 * 20
         vel_y = protocol.read_short(buffer) / 8000.0 * 20
         vel_z = protocol.read_short(buffer) / 8000.0 * 20
-
         velocity = math.Vector3D(vel_x, vel_y, vel_z)
         entity = self._create_object_entity(obj_type, entity_id, entity_uuid, math.Vector3D(x, y, z),
                                              math.Rotation(yaw, pitch), data)
@@ -1109,7 +1060,6 @@ class ConnectionState:
         title = protocol.read_string(buffer, max_length=13)
         position = protocol.read_position(buffer)
         direction = protocol.read_byte(buffer)
-
         entity = self._create_object_entity(83, entity_id, entity_uuid, math.Vector3D(*position),
                                             math.Rotation(0, 0), direction)
         entity.set_painting_type(title)
@@ -1144,7 +1094,7 @@ class ConnectionState:
         y = protocol.read_double(buffer)
         z = protocol.read_double(buffer)
         count = protocol.read_short(buffer)
-
+        # Experience Orb does not have an uid.
         entity = self._create_object_entity(69, entity_id, '00000000-0000-0000-0000-000000000000',
                                             math.Vector3D(x, y, z),
                                             math.Rotation(0, 0), count)
@@ -1162,14 +1112,12 @@ class ConnectionState:
     async def parse_0x12(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Close Window packet (0x12)"""
         window_id = protocol.read_ubyte(buffer)
-
         if window_id in self.windows:
             if window_id == 0:
                 for slot in self.windows[0].slots:
                     slot.item = None
             else:
                 del self.windows[window_id]
-
         self._dispatch('window_closed', window_id)
 
     async def parse_0x13(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1220,11 +1168,9 @@ class ConnectionState:
         window_id = protocol.read_ubyte(buffer)
         property_id = protocol.read_short(buffer)
         value = protocol.read_short(buffer)
-
         if window_id not in self.windows:
             _logger.warning( f"Received property update for unknown window ID: %s", window_id)
             return
-
         window = self.windows[window_id]
         window.set_property(property_id, value)
         self._dispatch('window_property_changed', window, property_id, value)
@@ -1239,7 +1185,6 @@ class ConnectionState:
             return
 
         window = self.windows[window_id]
-
         if window_id == 0:
             if 0 <= slot_index < len(window.slots):
                 window.set_slot(slot_index, slot_data)
@@ -1260,7 +1205,6 @@ class ConnectionState:
         """Handle Use Bed packet (0x30)"""
         entity_id = protocol.read_varint(buffer)
         location = protocol.read_position(buffer)
-
         if entity_id in self.entities:
             self._dispatch('use_bed', self.entities[entity_id], math.Vector3D(*location))
         else:
@@ -1270,7 +1214,6 @@ class ConnectionState:
         """Handle Set Cooldown packet (0x17) - Item cooldowns"""
         item_id = protocol.read_varint(buffer)
         cooldown_ticks = protocol.read_varint(buffer)
-
         self._dispatch('set_cooldown', item_id, cooldown_ticks)
 
     async def parse_0x4f(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1280,10 +1223,8 @@ class ConnectionState:
         amplifier = protocol.read_byte(buffer)
         duration = protocol.read_varint(buffer)
         flags = protocol.read_byte(buffer)
-
         is_ambient = bool(flags & 0x01)
         show_particles = bool(flags & 0x02)
-
         if entity_id in self.entities:
             self._dispatch( 'entity_effect', self.entities[entity_id], effect_id,  amplifier, duration, is_ambient,
                             show_particles)
@@ -1294,7 +1235,6 @@ class ConnectionState:
         """Handle Remove Entity Effect packet (0x33)"""
         entity_id = protocol.read_varint(buffer)
         effect_id = protocol.read_byte(buffer)
-
         if entity_id in self.entities:
             self._dispatch('remove_entity_effect', self.entities[entity_id], effect_id)
         else:
@@ -1304,7 +1244,6 @@ class ConnectionState:
         """Handle Resource Pack Send packet (0x34)"""
         url = protocol.read_string(buffer)
         hash_ = protocol.read_string(buffer)
-
         self._dispatch('resource_pack_send', url, hash_)
 
     async def parse_0x31(self, buffer: protocol.ProtocolBuffer) -> None:
@@ -1312,10 +1251,8 @@ class ConnectionState:
         action = protocol.read_varint(buffer)
         crafting_book_open = protocol.read_bool(buffer)
         filtering_craftable = protocol.read_bool(buffer)
-
         recipe_count_1 = protocol.read_varint(buffer)
         recipes_1 = [protocol.read_varint(buffer) for _ in range(recipe_count_1)]
-
         recipes_2 = None
         if action == 0:
             recipe_count_2 = protocol.read_varint(buffer)
@@ -1328,7 +1265,6 @@ class ConnectionState:
         flags = protocol.read_byte(data)
         flying_speed = protocol.read_float(data)
         fov_modifier = protocol.read_float(data)
-
         self.user.invulnerable =  bool(flags & 0x01)
         self.user.flying = bool(flags & 0x02)
         self.user.allow_flying = bool(flags & 0x04)
@@ -1341,13 +1277,11 @@ class ConnectionState:
     async def parse_0x38(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle World Border packet (0x38)"""
         action = protocol.read_varint(buffer)
-
         if action == 0:
             diameter = protocol.read_double(buffer)
             if self.world_border is not None:
                 self.world_border.set_size(diameter)
             self._dispatch('world_border_set_size', diameter)
-
         elif action == 1:
             old_diameter = protocol.read_double(buffer)
             new_diameter = protocol.read_double(buffer)
@@ -1355,7 +1289,6 @@ class ConnectionState:
             if self.world_border is not None:
                 self.world_border.lerp_size(old_diameter, new_diameter, speed)
             self._dispatch('world_border_lerp_size', old_diameter, new_diameter, speed)
-
         elif action == 2:
             x = protocol.read_double(buffer)
             z = protocol.read_double(buffer)
@@ -1363,7 +1296,6 @@ class ConnectionState:
                 self.world_border.set_center(math.Vector2D(x, z))
             center = math.Vector3D(x, 0, z)
             self._dispatch('world_border_set_center', center)
-
         elif action == 3:
             x = protocol.read_double(buffer)
             z = protocol.read_double(buffer)
@@ -1383,13 +1315,11 @@ class ConnectionState:
                 warning_blocks=warning_blocks
             )
             self._dispatch('world_border_initialize', self.world_border)
-
         elif action == 4:
             warning_time = protocol.read_varint(buffer)
             if self.world_border is not None:
                 self.world_border.set_warning_time(warning_time)
             self._dispatch('world_border_set_warning_time', warning_time)
-
         elif action == 5:
             warning_blocks = protocol.read_varint(buffer)
             if self.world_border is not None:
@@ -1400,10 +1330,8 @@ class ConnectionState:
         """Handle Scoreboard Objective Display packet (0x3B)"""
         position = protocol.read_byte(data)
         score_name = protocol.read_string(data, 16)
-
         for objective in self.scoreboard_objectives.values():
             objective.set_displayed(False)
-
         if score_name and score_name in self.scoreboard_objectives:
             self.scoreboard_objectives[score_name].set_displayed(True, position)
         self._dispatch('scoreboard_display', position, score_name)
@@ -1412,24 +1340,19 @@ class ConnectionState:
         """Handle Scoreboard Objective packet (0x42)"""
         objective_name = protocol.read_string(data, 16)
         mode = protocol.read_byte(data)
-
         if mode == 0:
             objective_value = protocol.read_string(data, 32)
             score_type = protocol.read_string(data, 16)
 
             objective = scoreboard.Scoreboard(objective_name, objective_value, score_type)
             self.scoreboard_objectives[objective_name] = objective
-
         elif mode == 1:
             self.scoreboard_objectives.pop(objective_name, None)
-
         elif mode == 2:
             objective_value = protocol.read_string(data, 32)
             score_type = protocol.read_string(data, 16)
-
             if objective_name in self.scoreboard_objectives:
                 self.scoreboard_objectives[objective_name].update_display_info(objective_value, score_type)
-
         self._dispatch('scoreboard_objective', objective_name, mode)
 
     async def parse_0x45(self, data: protocol.ProtocolBuffer) -> None:
@@ -1437,41 +1360,34 @@ class ConnectionState:
         entity_name = protocol.read_string(data, 40)
         action = protocol.read_byte(data)
         objective_name = protocol.read_string(data, 16)
-
         value = None
         if action != 1:
             value = protocol.read_varint(data)
-
         if objective_name in self.scoreboard_objectives:
             objective = self.scoreboard_objectives[objective_name]
             if action == 0:
                 objective.set_score(entity_name, value)
             elif action == 1:
                 objective.remove_score(entity_name)
-
         self._dispatch('scoreboard_score_update', entity_name, objective_name, action, value)
 
     async def parse_0x48(self, data: protocol.ProtocolBuffer) -> None:
         """Handle Title packet (0x48)"""
         action = protocol.read_varint(data)
-
         if action == 0:
             title_text = protocol.read_string(data)
             self.action_bar.set_title(title_text)
             self.action_bar.show()
             self._dispatch('title_set_title', title_text)
-
         elif action == 1:
             subtitle_text = protocol.read_string(data)
             self.action_bar.set_subtitle(subtitle_text)
             self.action_bar.show()
             self._dispatch('title_set_subtitle', subtitle_text)
-
         elif action == 2:
             action_bar_text = protocol.read_string(data)
             self.action_bar.set_action_bar(action_bar_text)
             self._dispatch('title_set_action_bar', action_bar_text)
-
         elif action == 3:
             fade_in = protocol.read_int(data)
             stay = protocol.read_int(data)
@@ -1479,11 +1395,9 @@ class ConnectionState:
             self.action_bar.set_times(fade_in, stay, fade_out)
             self.action_bar.show()
             self._dispatch('title_set_times', fade_in, stay, fade_out)
-
         elif action == 4:
             self.action_bar.hide()
             self._dispatch('title_hide')
-
         elif action == 5:
             self.action_bar.reset()
             self._dispatch('title_reset')
@@ -1497,7 +1411,6 @@ class ConnectionState:
         z = protocol.read_int(buffer)
         volume = protocol.read_float(buffer)
         pitch = protocol.read_float(buffer)
-
         position = math.Vector3D(x, y, z)
         self._dispatch('sound_effect', sound_id, category, position, volume, pitch)
 
@@ -1512,15 +1425,12 @@ class ConnectionState:
         collected_entity_id = protocol.read_varint(buffer)
         collector_entity_id = protocol.read_varint(buffer)
         pickup_count = protocol.read_varint(buffer)
-
         if collected_entity_id not in self.entities:
             _logger.warning("CollectItem: Unknown collected entity ID: %s", collected_entity_id)
             return
-
         if collector_entity_id not in self.entities:
             _logger.warning("CollectItem: Unknown collector entity ID: %s", collector_entity_id)
             return
-
         self._dispatch('collect_item', self.entities[collected_entity_id], pickup_count,
                        self.entities[collector_entity_id])
 
@@ -1536,23 +1446,17 @@ class ConnectionState:
 
             display_data = None
             if advancement_dict['display_data'] is not None:
-                display_data = advancement.AdvancementDisplay(
-                    advancement_dict['display_data']['title'],
-                    advancement_dict['display_data']['description'],
-                    advancement_dict['display_data']['icon'],
-                    advancement_dict['display_data']['frame_type'],
-                    advancement_dict['display_data']['flags'],
-                    advancement_dict['display_data']['background_texture'],
-                    math.Vector2D(advancement_dict['display_data']['x_coord'],
-                                  advancement_dict['display_data']['y_coord'])
-                )
-
-            ad = advancement.Advancement(
-                advancement_dict['parent_id'],
-                display_data,
-                advancement_dict['criteria'],
-                advancement_dict['requirements']
-            )
+                display_data = advancement.AdvancementDisplay(advancement_dict['display_data']['title'],
+                                                              advancement_dict['display_data']['description'],
+                                                              advancement_dict['display_data']['icon'],
+                                                              advancement_dict['display_data']['frame_type'],
+                                                              advancement_dict['display_data']['flags'],
+                                                              advancement_dict['display_data']['background_texture'],
+                                                              math.Vector2D(advancement_dict['display_data']['x_coord'],
+                                                                            advancement_dict['display_data']['y_coord'])
+                                                              )
+            ad = advancement.Advancement(advancement_dict['parent_id'], display_data, advancement_dict['criteria'],
+                                         advancement_dict['requirements'])
             advancements[advancement_id] = ad
 
         removed_list_size = protocol.read_varint(buffer)
@@ -1571,8 +1475,7 @@ class ConnectionState:
             for criterion_id, criterion_data in progress_dict['criteria'].items():
                 criteria[criterion_id] = advancement.CriterionProgress(
                     criterion_data['achieved'],
-                    criterion_data['date_of_achieving']
-                )
+                    criterion_data['date_of_achieving'])
 
             advancement_progress = advancement.AdvancementProgress(criteria)
             progress[advancement_id] = advancement_progress
