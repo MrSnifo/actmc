@@ -5,14 +5,14 @@ labels: [
   "enhancement"
 ]
 body:
-  - type: input
+  - type: checkboxes
     id: no_duplicate
     attributes:
       label: "No Duplicate"
-      description: "I have checked, and this request has not been made before"
-      placeholder: "Enter 'yes' to confirm"
-    validations:
-      required: true
+      description: "Please confirm you have checked for existing requests"
+      options:
+        - label: "I have checked, and this request has not been made before"
+          required: true
   - type: textarea
     id: problem
     attributes:

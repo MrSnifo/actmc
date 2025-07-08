@@ -27,13 +27,9 @@ body:
       label: "Reproduction steps"
       description: Please enter step-by-step instructions to reproduce the issue
       render: bash
-      placeholder: |
-        1. Go to '...'
-        2. Click on '...'
-        3. Scroll down to '...'
-        4. See error
+      placeholder: "Provide step-by-step instructions to reproduce the issue"
     validations:
-      required: true
+      required: true    
   - type: textarea
     id: expected
     attributes:
