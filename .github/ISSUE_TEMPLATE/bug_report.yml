@@ -18,11 +18,6 @@ body:
     attributes:
       label: "Reproduction steps"
       description: Please enter an explicit description of your issue
-      value: |
-        1. Go to '...'
-        2. Click on '....'
-        3. Scroll down to '....'
-        4. See error
       render: bash
     validations:
       required: true    
@@ -32,9 +27,7 @@ body:
       label: "Logs"
       description: Copy and paste relevant log output with Debug mode enabled (log level).
       render: bash
-      placeholder: | 
-        Sensitive information or tokens are included in the logs. Clear any tokens or
-        sensitive data before submitting.
+      placeholder: Clear any tokens or sensitive data before submitting.
     validations:
       required: false
   - type: dropdown
