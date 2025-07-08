@@ -5,14 +5,6 @@ labels: [
   "bug"
 ]
 body:
-  - type: input
-    id: no_duplicate
-    attributes:
-      label: "No Duplicate"
-      description: "I have checked, and this request has not been made before"
-      placeholder: "Enter 'yes' to confirm"
-    validations:
-      required: true
   - type: textarea
     id: description
     attributes:
