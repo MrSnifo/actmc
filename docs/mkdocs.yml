@@ -58,8 +58,6 @@ theme:
     - navigation.tracking
     - navigation.top
     - toc.follow
-    - search.suggest
-    - search.highlight
     - content.code.copy
     - content.code.select
     - content.code.annotate
