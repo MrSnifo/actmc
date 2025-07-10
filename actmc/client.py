@@ -54,22 +54,25 @@ __all__ = ('Client',)
 
 class Client:
     """
-    A Minecraft client for connecting to and interacting with Minecraft servers.
+    Minecraft client.
 
     Parameters
     ----------
     username: str
-        The username to use for the connection.
+       The username to use for the connection.
+    **options: Any
+       Configuration options for the client connection.
+
+       **load_chunks**: [bool][bool]
+
+        - Whether to load and store chunk data in memory. Default is True.
     """
 
-    def __init__(self, username: str) -> None:
-        # Core event loop and networking
+    def __init__(self, username: str, **options: Any) -> None:
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.socket: Optional[MinecraftSocket] = None
         self.tcp: TcpClient = TcpClient()
-
-        # Connection and state management
-        self._connection: ConnectionState = self._get_state(username)
+        self._connection: ConnectionState = self._get_state(username, **options)
         self._ready: Optional[asyncio.Event] = None
         self._closing_task: Optional[asyncio.Task] = None
 
@@ -84,18 +87,6 @@ class Client:
             The current user object, or None if not connected.
         """
         return self._connection.user
-
-    @property
-    def chunks(self) -> Dict[Vector2D[int], Chunk]:
-        """
-        Get the loaded chunks.
-
-        Returns
-        -------
-        Dict[Vector2D[int], Chunk]
-            Dictionary mapping chunk coordinates to chunk objects.
-        """
-        return self._connection.chunks
 
     @property
     async def difficulty(self) -> Optional[int]:
@@ -170,6 +161,18 @@ class Client:
         return self._connection.world_border
 
     @property
+    def chunks(self) -> Dict[Vector2D[int], Chunk]:
+        """
+        Get the loaded chunks.
+
+        Returns
+        -------
+        Dict[Vector2D[int], Chunk]
+            Dictionary mapping chunk coordinates to chunk objects.
+        """
+        return self._connection.chunks
+
+    @property
     def tablist(self) -> Dict[str, PlayerInfo]:
         """
         Get the player tab list.
@@ -229,93 +232,21 @@ class Client:
         """
         return self._connection.action_bar
 
-    def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
-        """
-        Get the block at the specified position.
-
-        Parameters
-        ----------
-        pos: Vector3D[int]
-            The position coordinates of the block.
-
-        Returns
-        -------
-        Optional[Block]
-            The block at the specified position, or None if not available.
-        """
-        return self._connection.get_block_state(pos)
-
+    @property
     def is_closed(self) -> bool:
         return self._closing_task is not None
 
-    async def connect(self, host: str, port: int) -> None:
+    @property
+    def is_ready(self) -> bool:
         """
-        Connect to a Minecraft server.
+        Check whether the client's internal cache is ready.
 
-        Parameters
-        ----------
-        host: str
-           The server hostname or IP address.
-        port: int
-           The server port number.
-
-        Raises
-        ------
-        ConnectionClosed
-           If the connection is interrupted unexpectedly.
-        ClientException
-           If the client fails to connect.
-
-        Warnings
-        --------
-        Repeated calls to this method without delays may trigger server rate limiting.
-        Implement appropriate delays between connection attempts.
-
-        Notes
-        -----
-        By using this, you agree to Minecraft's EULA:
-
-        https://account.mojang.com/documents/minecraft_eula
+        Returns
+        -------
+        bool
+            True if the client is fully initialized and ready to be used, False otherwise.
         """
-        while not self.is_closed():
-            try:
-                socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
-                self.socket = await asyncio.wait_for(socket, timeout=60.0)
-                self.dispatch('connect')
-                while True:
-                    await self.socket.poll()
-            except (ConnectionClosed, asyncio.exceptions.IncompleteReadError, asyncio.TimeoutError, OSError) as exc:
-                self.dispatch('disconnect')
-                await self.close()
-                if self.is_closed():
-                    return
-                if isinstance(exc, ConnectionClosed):
-                    raise
-                elif isinstance(exc, asyncio.exceptions.IncompleteReadError):
-                    raise ConnectionClosed("Connection interrupted unexpectedly") from exc
-                elif isinstance(exc, asyncio.TimeoutError):
-                    raise ClientException(f"Connection timeout to {host}:{port}") from None
-                elif isinstance(exc, OSError):
-                    if hasattr(exc, 'winerror') and exc.winerror == 121:
-                        raise ClientException(f"Network timeout connecting to {host}:{port}") from None
-                    else:
-                        raise ClientException(f"Failed to connect to {host}:{port}") from None
-
-    async def start(self, host: str, port: int = 25565) -> None:
-        """
-        Start the client and connect to the server.
-
-        Parameters
-        ----------
-        host: str
-            The server hostname or IP address.
-        port: int
-            The server port number.
-        """
-        if self.loop is None:
-            await self._async_loop()
-
-        await self.connect(host, port)
+        return self._ready is not None and self._ready.is_set()
 
     def clear(self) -> None:
         """
@@ -355,6 +286,200 @@ class Client:
 
         self._closing_task = asyncio.create_task(_close())
         return await self._closing_task
+
+    def event(self, coro: Callable[..., Any], /) -> None:
+        """
+        Register a coroutine function as an event handler.
+
+        This method assigns the given coroutine function to be used as an event handler with the same
+        name as the coroutine function.
+
+        Parameters
+        ----------
+        coro: Callable[..., Any]
+            The coroutine function to register as an event handler.
+
+        Raises
+        ------
+        TypeError
+            If the provided function is not a coroutine function.
+        """
+        if not asyncio.iscoroutinefunction(coro):
+            raise TypeError('The registered event must be a coroutine function')
+        setattr(self, coro.__name__, coro)
+
+    def dispatch(self, event: str, /, *args: Any, **kwargs: Any) -> None:
+        """
+        Dispatch a specified event with a coroutine callback.
+
+        Parameters
+        ----------
+        event: str
+            The name of the event to dispatch.
+        *args: Any
+            Positional arguments to pass to the event handler.
+        **kwargs: Any
+            Keyword arguments to pass to the event handler.
+        """
+        method = 'on_' + event
+        try:
+            coro = getattr(self, method)
+            if coro is not None and asyncio.iscoroutinefunction(coro):
+                _logger.trace('Dispatching event %s', event)  # type: ignore
+                wrapped = self._run_event(coro, method, *args, **kwargs)
+                self.loop.create_task(wrapped, name=f'actmc:{method}')
+        except AttributeError:
+            pass
+        except Exception as error:
+            _logger.error('Event: %s Error: %s', event, error)
+
+    @staticmethod
+    async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
+        """
+        Handle errors occurring during event dispatch.
+
+        This static method logs an exception that occurred during the processing of an event.
+
+        Parameters
+        ----------
+        packet_id: str
+            The packet id of the event that caused the error.
+        error: Exception
+            The exception that was raised.
+        *args: Any
+            Positional arguments passed to the event.
+        **kwargs: Any
+            Keyword arguments passed to the event.
+        """
+        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id, args, kwargs)
+
+    def _handle_ready(self) -> None:
+        """Signal that the connection is ready."""
+        self._ready.set()
+
+    def _get_state(self, username: str, **options: Any) -> ConnectionState:
+        """Create and return a connection state object."""
+        return ConnectionState(username, self.tcp, self.dispatch, self._handle_ready, **options)
+
+    async def _async_loop(self) -> None:
+        """Initialize the asynchronous event loop for managing client operations."""
+        loop = asyncio.get_running_loop()
+        self.loop = loop
+        self._ready = asyncio.Event()
+
+    async def setup_hook(self) -> None:
+        """
+        Perform additional setup before the client is connected.
+
+        ???+ Warning
+            Do not use `wait_until_ready()` within this method as it may cause
+            it to freeze.
+
+        You can configure or set up additional extensions or services as required.
+        """
+        pass
+
+    async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
+        """Run an event coroutine and handle exceptions."""
+        try:
+            await coro(*args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            await self.on_error(event_name, error, *args, **kwargs)
+
+    async def wait_until_ready(self) -> None:
+        """
+        Wait until the client's internal cache is ready.
+
+        This coroutine blocks until the client's internal state is fully initialized
+        and ready to be used.
+
+        Raises
+        ------
+        RuntimeError
+            If the client has not been initialized. Ensure that you use the asynchronous
+            context manager to initialize the client.
+
+        Warnings
+        --------
+        Calling this method inside `setup_hook()` may cause a deadlock.
+        """
+        if self._ready is not None:
+            await self._ready.wait()
+        else:
+            raise RuntimeError(
+                "The client is not initialized. Use the asynchronous context manager to initialize the client."
+            )
+
+    async def connect(self, host: str, port: int) -> None:
+        """
+        Connect to a Minecraft server.
+
+        Parameters
+        ----------
+        host: str
+           The server hostname or IP address.
+        port: int
+           The server port number.
+
+        Raises
+        ------
+        ConnectionClosed
+           If the connection is interrupted unexpectedly.
+        ClientException
+           If the client fails to connect.
+
+        Warnings
+        --------
+        Repeated calls to this method without delays may trigger server rate limiting.
+        Implement appropriate delays between connection attempts.
+
+        Notes
+        -----
+        By using this, you agree to Minecraft's EULA:
+
+        https://account.mojang.com/documents/minecraft_eula
+        """
+        while not self.is_closed:
+            try:
+                socket = MinecraftSocket.initialize_socket(client=self, host=host, port=port, state=self._connection)
+                self.socket = await asyncio.wait_for(socket, timeout=60.0)
+                self.dispatch('connect')
+                while True:
+                    await self.socket.poll()
+            except (ConnectionClosed, asyncio.exceptions.IncompleteReadError, asyncio.TimeoutError, OSError) as exc:
+                self.dispatch('disconnect')
+                await self.close()
+                if self.is_closed:
+                    return
+                if isinstance(exc, ConnectionClosed):
+                    raise
+                elif isinstance(exc, asyncio.exceptions.IncompleteReadError):
+                    raise ConnectionClosed("Connection interrupted unexpectedly") from exc
+                elif isinstance(exc, asyncio.TimeoutError):
+                    raise ClientException(f"Connection timeout to {host}:{port}") from None
+                elif isinstance(exc, OSError):
+                    if hasattr(exc, 'winerror') and exc.winerror == 121:
+                        raise ClientException(f"Network timeout connecting to {host}:{port}") from None
+                    else:
+                        raise ClientException(f"Failed to connect to {host}:{port}") from None
+
+    async def start(self, host: str, port: int = 25565) -> None:
+        """
+        Start the client and connect to the server.
+
+        Parameters
+        ----------
+        host: str
+            The server hostname or IP address.
+        port: int
+            The server port number.
+        """
+        if self.loop is None:
+            await self._async_loop()
+        await self.setup_hook()
+        await self.connect(host, port)
 
     async def __aenter__(self) -> Client:
         """Asynchronous context manager entry method."""
@@ -417,6 +542,22 @@ class Client:
             asyncio.run(runner())
         except KeyboardInterrupt:
             return
+
+    def get_block(self, pos: Vector3D[int]) -> Optional[Block]:
+        """
+        Get the block at the specified position.
+
+        Parameters
+        ----------
+        pos: Vector3D[int]
+            The position coordinates of the block.
+
+        Returns
+        -------
+        Optional[Block]
+            The block at the specified position, or None if not available.
+        """
+        return self._connection.get_block_state(pos)
 
     async def perform_respawn(self) -> None:
         """Request the server to respawn the player."""
@@ -1016,128 +1157,3 @@ class Client:
             The inventory slot number to clear.
         """
         await self._connection.tcp.creative_inventory_action(slot, None)
-
-    def event(self, coro: Callable[..., Any], /) -> None:
-        """
-        Register a coroutine function as an event handler.
-
-        This method assigns the given coroutine function to be used as an event handler with the same
-        name as the coroutine function.
-
-        Parameters
-        ----------
-        coro: Callable[..., Any]
-            The coroutine function to register as an event handler.
-
-        Raises
-        ------
-        TypeError
-            If the provided function is not a coroutine function.
-        """
-        if not asyncio.iscoroutinefunction(coro):
-            raise TypeError('The registered event must be a coroutine function')
-        setattr(self, coro.__name__, coro)
-
-    def dispatch(self, event: str, /, *args: Any, **kwargs: Any) -> None:
-        """
-        Dispatch a specified event with a coroutine callback.
-
-        Parameters
-        ----------
-        event: str
-            The name of the event to dispatch.
-        *args: Any
-            Positional arguments to pass to the event handler.
-        **kwargs: Any
-            Keyword arguments to pass to the event handler.
-        """
-        method = 'on_' + event
-        try:
-            coro = getattr(self, method)
-            if coro is not None and asyncio.iscoroutinefunction(coro):
-                _logger.trace('Dispatching event %s', event)  # type: ignore
-                wrapped = self._run_event(coro, method, *args, **kwargs)
-                self.loop.create_task(wrapped, name=f'actmc:{method}')
-        except AttributeError:
-            pass
-        except Exception as error:
-            _logger.error('Event: %s Error: %s', event, error)
-
-    def _handle_ready(self) -> None:
-        """Signal that the connection is ready."""
-        self._ready.set()
-
-    def _get_state(self, username: str) -> ConnectionState:
-        """Create and return a connection state object."""
-        return ConnectionState(username, tcp=self.tcp, dispatcher=self.dispatch, handle_ready=self._handle_ready)
-
-    async def _async_loop(self) -> None:
-        """Initialize the asynchronous event loop for managing client operations."""
-        loop = asyncio.get_running_loop()
-        self.loop = loop
-        self._ready = asyncio.Event()
-
-    async def _run_event(self, coro: Callable[..., Any], event_name: str, *args: Any, **kwargs: Any) -> None:
-        """Run an event coroutine and handle exceptions."""
-        try:
-            await coro(*args, **kwargs)
-        except asyncio.CancelledError:
-            pass
-        except Exception as error:
-            await self.on_error(event_name, error, *args, **kwargs)
-
-    async def wait_until_ready(self) -> None:
-        """
-        Wait until the client's internal cache is ready.
-
-        This coroutine blocks until the client's internal state is fully initialized
-        and ready to be used.
-
-        Raises
-        ------
-        RuntimeError
-            If the client has not been initialized. Ensure that you use the asynchronous
-            context manager to initialize the client.
-
-        Warnings
-        --------
-        Calling this method inside `setup_hook()` may cause a deadlock.
-        """
-        if self._ready is not None:
-            await self._ready.wait()
-        else:
-            raise RuntimeError(
-                "The client is not initialized. Use the asynchronous context manager to initialize the client."
-            )
-
-    @property
-    def is_ready(self) -> bool:
-        """
-        Check whether the client's internal cache is ready.
-
-        Returns
-        -------
-        bool
-            True if the client is fully initialized and ready to be used, False otherwise.
-        """
-        return self._ready is not None and self._ready.is_set()
-
-    @staticmethod
-    async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
-        """
-        Handle errors occurring during event dispatch.
-
-        This static method logs an exception that occurred during the processing of an event.
-
-        Parameters
-        ----------
-        packet_id: str
-            The packet id of the event that caused the error.
-        error: Exception
-            The exception that was raised.
-        *args: Any
-            Positional arguments passed to the event.
-        **kwargs: Any
-            Keyword arguments passed to the event.
-        """
-        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id, args, kwargs)

@@ -1,0 +1,227 @@
+site_name: Actmc
+site_url: !!python/object/apply:os.getenv ["READTHEDOCS_CANONICAL_URL"]
+site_author: Snifo
+site_description: >-
+  An asynchronous Python client library for Minecraft 1.12.2 Java Edition (offline-mode).
+  Built with a modern async/await API, offering full protocol support and optimized for performance.
+
+repo_url: https://github.com/mrsnifo/actmc
+repo_name: mrsnifo/actmc
+copyright: Copyright (c) 2025-present Snifo
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/mrsnifo
+      name: GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/user/Snifo/
+      name: PyPI
+
+theme:
+  name: material
+  custom_dir: overrides
+  font:
+    text: "Press Start 2P, Inter, sans-serif"
+    code: JetBrains Mono
+  icon:
+    logo: material/minecraft
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme)"
+      primary: green
+      accent: lime
+      toggle:
+        icon: material/lightbulb-auto
+        name: Switch to light mode
+
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: lime
+      toggle:
+        icon: material/lightbulb
+        name: Switch to dark mode
+
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: lime
+      toggle:
+        icon: material/lightbulb-outline
+        name: Switch to system preference
+  features:
+    - navigation.instant
+    - navigation.path
+    - navigation.prune
+    - navigation.tabs
+    - navigation.tracking
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.select
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+nav:
+  - Getting started:
+      - 'index.md'
+      - Concepts: 'concepts.md'
+      - Quickstart: 'quickstart.md'
+  - Reference:
+      - Client: 'reference/client.md'
+      - Classes:
+          - user: 'reference/classes/user.md'
+          - ui:
+              - chat: 'reference/classes/ui/chat.md'
+              - gui: 'reference/classes/ui/gui.md'
+              - Action Bar: 'reference/classes/ui/actionbar.md'
+              - Advancement: 'reference/classes/ui/advancement.md'
+              - border: 'reference/classes/ui/border.md'
+              - bossbar: 'reference/classes/ui/bossbar.md'
+              - scoreboard: 'reference/classes/ui/scoreboard.md'
+              - tablist: 'reference/classes/ui/tablist.md'
+          - entities:
+              - Entity: 'reference/classes/entities/entity.md'
+              - Ambient: 'reference/classes/entities/ambient.md'
+              - Animals: 'reference/classes/entities/animals.md'
+              - Aquatic: 'reference/classes/entities/aquatic.md'
+              - Blocks: 'reference/classes/entities/blocks.md'
+              - Dragons: 'reference/classes/entities/dragons.md'
+              - Flying: 'reference/classes/entities/flying.md'
+              - Golems: 'reference/classes/entities/golems.md'
+              - Hanging: 'reference/classes/entities/hanging.md'
+              - Illagers: 'reference/classes/entities/illagers.md'
+              - Misc: 'reference/classes/entities/misc.md'
+              - Monsters: 'reference/classes/entities/monsters.md'
+              - Player: 'reference/classes/entities/player.md'
+              - Projectiles: 'reference/classes/entities/projectiles.md'
+              - Tameable: 'reference/classes/entities/tameable.md'
+              - Vehicles: 'reference/classes/entities/vehicles.md'
+              - Villagers: 'reference/classes/entities/villagers.md'
+          - chunk: 'reference/classes/chunk.md'
+          - math: 'reference/classes/math.md'
+      - Exceptions: 'reference/exceptions.md'
+      - utils: 'reference/utils.md'
+  - Events Reference:
+      - 'event/index.md'
+      - Events:
+          - client: 'event/events/client.md'
+          - user: 'event/events/user.md'
+          - player state: 'event/events/player-state.md'
+          - combat: 'event/events/combat.md'
+          - world: 'event/events/world.md'
+          - entities: 'event/events/entities.md'
+          - effects: 'event/events/effects.md'
+          - game state: 'event/events/game-state.md'
+          - miscellaneous: 'event/events/miscellaneous.md'
+          - ui:
+              - chat: 'event/events/ui/chat.md'
+              - action bar: 'event/events/ui/action-bar.md'
+              - advancement: 'event/events/ui/advancement.md'
+              - border: 'event/events/ui/border.md'
+              - bossbar: 'event/events/ui/bossbar.md'
+              - gui: 'event/events/ui/gui.md'
+              - scoreboard: 'event/events/ui/scoreboard.md'
+              - tablist: 'event/events/ui/tablist.md'
+  - Extensions:
+      - Ticks: 'ext/ticks.md'
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+      permalink_title: Anchor link to this section
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      use_pygments: true
+      anchor_linenums: true
+      pygments_style: github-dark
+      pygments_lang_class: true
+      line_spans: __span
+      linenums_style: pymdownx-inline
+      auto_title: true
+  - pymdownx.inlinehilite:
+      style_plain_text: true
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      user: mrsnifo
+      repo: actmc
+      repo_url_shorthand: true
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      base_path: [docs]
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=([A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - mkdocstrings:
+      default_handler: python
+      enable_inventory: true
+      handlers:
+        python:
+          inventories:
+            - https://docs.python.org/3/objects.inv
+          paths: [.., ../actmc/ext]
+          options:
+            inherited_members: true
+            show_source: false
+            show_root_heading: true
+            show_root_toc_entry: true
+            show_root_full_path: false
+            members_order: source
+            annotations_path: source
+            docstring_style: numpy
+            docstring_section_style: spacy
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            show_bases: true
+            show_submodules: true
+            merge_init_into_class: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            preload_modules: [actmc]
+            allow_inspection: true
+            filters:
+              - "!^_"
+              - "!^test_"
+            extra:
+              Extensions:
+                - griffe.extensions.dataclasses
+                - griffe.extensions.hybrid
+              load_external_modules: true

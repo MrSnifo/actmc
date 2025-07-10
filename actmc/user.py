@@ -39,9 +39,49 @@ __slots__ = ('User',)
 class User(Player):
     """Enhanced Minecraft Player class with utility methods
 
-    Note: use hasattr to make sure that data....
+    Note
+    ----
+    Use `hasattr` to check for attribute availability before accessing them,
+    as some attributes may not always be present.
 
+    Attributes
+    ----------
+    username: str
+        The player's username.
+    gamemode: int
+        Current gamemode ID (0: survival, 1: creative, 2: adventure, 3: spectator).
+    dimension: int
+        Current dimension ID (-1: nether, 0: overworld, 1: end).
+    health: float
+        Player's current health points.
+    food: int
+        Player's current food (hunger) level.
+    food_saturation: float
+        Player's current food saturation level.
+    level: int
+        Player's experience level.
+    total_experience: int
+        Total accumulated experience points.
+    experience_bar: float
+        Progress on the experience bar (0.0 to 1.0).
+    held_slot: int
+        Index of the currently held inventory slot.
+    spawn_point: Vector3D[float]
+        Player's current spawn point coordinates.
+    invulnerable: bool
+        Whether the player is invulnerable.
+    flying: bool
+        Whether the player is currently flying.
+    allow_flying: bool
+        Whether the player is allowed to fly.
+    creative_mode: bool
+        Whether the player is in creative mode.
+    flying_speed: float
+        The player's flying speed multiplier.
+    fov_modifier: float
+        Field of view modifier affecting the player's view.
     """
+
     __slots__ = ('_state', 'username', 'gamemode', 'dimension',
                  'health', 'food', 'food_saturation',
                  'level', 'total_experience', 'experience_bar',
@@ -90,6 +130,7 @@ class User(Player):
         creative_mode: bool
         flying_speed: float
         fov_modifier: float
+
 
     def __init__(self, entity_id: int, username: str, uuid: str, *, state: ConnectionState) -> None:
         super().__init__(entity_id, uuid, Vector3D(0, 0, 0), Rotation(0, 0), {},
