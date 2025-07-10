@@ -55,4 +55,4 @@ client.run('localhost', 25565)
 ## Documentation and Support
 
 For more detailed instructions,
-visit the [twitch.py Documentation](https://actmc.readthedocs.io/latest/).
+visit the [actmc Documentation](https://actmc.readthedocs.io/latest/).
