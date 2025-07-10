@@ -31,6 +31,7 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/mrsnifo/actmc"
+Documentation = "https://actmc.readthedocs.io/latest/"
 "Issue tracker" = "https://github.com/mrsnifo/actmc/issues"
 Repository = "https://github.com/mrsnifo/actmc"
 
