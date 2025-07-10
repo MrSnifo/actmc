@@ -51,3 +51,8 @@ async def on_system_message(message: chat.Message):
 
 client.run('localhost', 25565)
 ```
+
+## Documentation and Support
+
+For more detailed instructions,
+visit the [twitch.py Documentation](https://actmc.readthedocs.io/latest/).
