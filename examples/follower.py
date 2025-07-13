@@ -3,7 +3,6 @@ from actmc.entities.player import Player
 from typing import Optional
 from actmc import Client
 
-
 client = Client('Steve')
 
 @client.event
