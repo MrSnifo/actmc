@@ -168,7 +168,7 @@ class Client:
         Returns
         -------
         Dict[Vector2D[int], Chunk]
-            Dictionary mapping chunk coordinates to chunk objects.
+            Dictionary mapping chunk coordinates to chunk.
         """
         return self._connection.chunks
 
@@ -180,7 +180,7 @@ class Client:
         Returns
         -------
         Dict[str, PlayerInfo]
-            A dictionary mapping player UIDs to TabPlayer objects.
+            A dictionary mapping player UIDs to PlayerInfo.
         """
         return self._connection.tablist
 
@@ -192,7 +192,7 @@ class Client:
         Returns
         -------
         Dict[int, Window]
-            Dictionary mapping window IDs to Window objects.
+            Dictionary mapping window IDs to Window.
         """
         return self._connection.windows
 
@@ -204,7 +204,7 @@ class Client:
         Returns
         -------
         Dict[str, BossBar]
-            Dictionary mapping boss bar UUIDs to BossBar objects.
+            Dictionary mapping boss bar UUIDs to BossBar.
         """
         return self._connection.boss_bars
 
@@ -216,7 +216,7 @@ class Client:
         Returns
         -------
         Dict[str, Scoreboard]
-            Dictionary mapping objective names to ScoreboardObjective objects.
+            Dictionary mapping objective names to ScoreboardObjective.
         """
         return self._connection.scoreboard_objectives
 
@@ -228,7 +228,7 @@ class Client:
         Returns
         -------
         Title
-            The current action bar title object.
+            The current action bar title.
         """
         return self._connection.action_bar
 
@@ -557,7 +557,7 @@ class Client:
         Optional[Block]
             The block at the specified position, or None if not available.
         """
-        return self._connection.get_block_state(pos)
+        return self._connection.get_block(pos)
 
     async def perform_respawn(self) -> None:
         """Request the server to respawn the player."""

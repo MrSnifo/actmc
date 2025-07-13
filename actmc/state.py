@@ -177,53 +177,26 @@ class ConnectionState:
 
         self._dispatch('ready')
 
-    # World/Chunk Methods
-    def get_block_state(self, position: math.Vector3D[int]) -> Optional[Block]:
+    def get_block(self, position: math.Vector3D[int]) -> Optional[Block]:
         """Get block state at specified world position."""
         chunk_coords, block_pos, section_y = position_to_chunk_relative(position)
         chunk = self.chunks.get(chunk_coords)
         if chunk is None:
             return None
-
         section = chunk.get_section(section_y)
-        return section.get_state(block_pos) if section else None
 
-    def _set_block_state(self, state: Block) -> None:
-        """Update block state in loaded chunks."""
-        chunk_coords, block_pos, section_y = position_to_chunk_relative(state.position)
-        chunk = self.chunks.get(chunk_coords)
-        if chunk is None:
-            return
-
-        section = chunk.get_section(section_y)
         if section is None:
-            section = ChunkSection(math.Vector2D(0, 0))
-            chunk.set_section(section_y, section)
+            return None
 
-        section.set_state(block_pos, state)
-
-    def _set_block_entity(self, pos: math.Vector3D[int], block_entity: entities.entity.BaseEntity[str]) -> None:
-        """Set block entity at specified position."""
-        chunk_coords, block_pos, section_y = position_to_chunk_relative(pos)
-        chunk = self.chunks.get(chunk_coords)
-        if chunk is None:
-            return
-
-        section = chunk.get_section(section_y)
-        if section is None:
-            section = ChunkSection(math.Vector2D(0, 0))
-            chunk.set_section(section_y, section)
-
-        section.set_entity(block_pos, block_entity)
+        block = Block(*section.get_block(block_pos), position=position)
+        block.entity = section.get_block_entity(block_pos)
+        return block
 
     async def _load_chunk_task(self, chunk_x: int, chunk_z: int, ground_up_continuous: bool,
                                primary_bit_mask: int, chunk_buffer: bytes, block_entities_data: list) -> None:
         """Asynchronously load a chunk column in a background task."""
         try:
-            chunk = Chunk(math.Vector2D(chunk_x, chunk_z))
-            chunk.load_chunk_column(ground_up_continuous, primary_bit_mask, chunk_buffer)
-
-            # Add block entities from NBT data
+            chunk = Chunk(math.Vector2D(chunk_x, chunk_z), ground_up_continuous, primary_bit_mask, chunk_buffer)
             for data in block_entities_data:
                 pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z')).to_int()
                 entity_id = data.pop('id')
@@ -400,11 +373,16 @@ class ConnectionState:
         block_type = block_state_id >> 4
         block_meta = block_state_id & 0xF
 
-        state = Block(block_type, block_meta, math.Vector3D(*position).to_int())
+        block = Block(block_type, block_meta, math.Vector3D(*position).to_int())
         if self._load_chunks:
-            self._set_block_state(state)
+            chunk_coords, block_pos, section_y = position_to_chunk_relative(block.position)
+            chunk = self.chunks.get(chunk_coords)
+            if chunk is None:
+                _logger.warning('Unloaded chuck position: %s, Multi block change', chunk_coords)
+                return
+            chunk.set_block_state(block_pos, section_y, block.id, block.metadata)
 
-        self._dispatch('block_change', state)
+        self._dispatch('block_change', block)
 
     async def parse_0x10(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Multi Block Change packet (0x10) - Bulk block updates"""
@@ -432,7 +410,12 @@ class ConnectionState:
 
             state = Block(block_type, block_meta, math.Vector3D(x, y, z).to_int())
             if self._load_chunks:
-                self._set_block_state(state)
+                chunk_coords, block_pos, section_y = position_to_chunk_relative(state.position)
+                chunk = self.chunks.get(chunk_coords)
+                if chunk is None:
+                    _logger.warning('Unloaded chuck position: %s, Multi block change', chunk_coords)
+                    return
+                chunk.set_block_state(block_pos, section_y, state.id, state.metadata)
 
             states.append(state)
 
@@ -441,18 +424,23 @@ class ConnectionState:
     async def parse_0x09(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Update Block Entity packet (0x09) - Block entity NBT update"""
         # Parse packet data
-        _ = protocol.read_position(buffer)
+        position = protocol.read_position(buffer)
         _ = protocol.read_ubyte(buffer)
         data = protocol.read_nbt(buffer)
-
-        # Extract position and entity ID from NBT
-        pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z'))
         entity_id = data.pop('id')
+
+        vec = math.Vector3D(*position)
+
         block_entity = self._create_block_entity(entity_id, data)
         if self._load_chunks:
-            self._set_block_entity(pos.to_int(), block_entity)
+            chunk_coords, block_pos, section_y = position_to_chunk_relative(vec)
+            chunk = self.chunks.get(chunk_coords)
+            if chunk is None:
+                _logger.warning('Unloaded chuck position: %s, Block entity update', chunk_coords)
+                return
 
-        self._dispatch('block_entity_update', pos, block_entity)
+            chunk.set_block_entity(block_pos, section_y, block_entity)
+        self._dispatch('block_entity_update', vec, block_entity)
 
     # Entities
     async def parse_0x05(self, buffer: protocol.ProtocolBuffer) -> None:

@@ -16,11 +16,11 @@
 
 ### Map
 - **Description**: Map data received
-- **Parameters**:
+- **Parametcers**:
   - `damage`: [`int`][int] - Map damage value
   - `scale`: [`int`][int] - Map scale
   - `tracking`: [`bool`][bool] - Tracking position
-  - `icons`: [`List`][typing.List][Dict] - Map icons
+  - `icons`: [`List`][typing.List][[`Dict`][typing.Dict][]] - Map icons
   - `columns`: [`int`][int] - Map columns
   - `rows`: [`Optional`][typing.Optional][[`int`][int]] - Map rows
   - `offset`: [`Optional`][typing.Optional][[`Vector2D`][actmc.math.Vector2D]] - Map offset

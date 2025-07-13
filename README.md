@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-4CAF50.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-An async Python client for Minecraft 1.12.2 Java Edition servers (offline-mode).
+An async Python client for Minecraft Java Edition 1.12.2 servers that run in offline mode.
 
 **Key Features**
 * Modern async/await API.
