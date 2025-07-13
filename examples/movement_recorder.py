@@ -182,5 +182,5 @@ class Bot(Client):
     async def on_entity_head_look(self, e) -> None: await self._record_movement(e)
 
 
-bot = Bot("Steve", "Snifo")
-bot.run("localhost")
+bot = Bot('Steve', 'Snifo')
+bot.run('localhost')
