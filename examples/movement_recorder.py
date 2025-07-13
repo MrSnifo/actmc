@@ -10,13 +10,17 @@ class Bot(Client):
     """
     Records and replays player movements in Minecraft.
 
+    Note
+    ----
+    Make sure the bot is at the starting position before recording or playback.
+
     Commands
     --------
-    !target - Lock onto owner player
-    !record - Start movement recording
+    !target - Lock onto the owner player
+    !record - Start recording movements
     !stop   - Stop recording
-    !play   - Replay movements
-    !clear  - Reset recordings
+    !play   - Replay recorded movements
+    !clear  - Clear all recorded movements
     """
 
     def __init__(self, username: str, owner_name: str) -> None:
