@@ -150,13 +150,13 @@ class ConnectionState:
             self._dispatch('error', packet_id, error)
 
     # Player State Methods
-    
+
     def _check_ready_state(self) -> None:
         """
         Check if all required player data is received and fire ready event.
         Only fires once per connection.
         """
-        if self._ready_called and not self.user:
+        if self._ready_called and self.user is not None:
             return
 
         # Check all required player attributes are populated

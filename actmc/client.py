@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from typing import Optional, Literal, Any, Callable, Dict, Type
     from .ui.scoreboard import Scoreboard
     from .math import Vector2D, Vector3D
+    from .entities.entity import Entity
     from .ui.tablist import PlayerInfo
     from .ui.border import WorldBorder
     from .ui.actionbar import Title
@@ -147,6 +148,18 @@ class Client:
             The time of day in ticks, or None if not available.
         """
         return self._connection.time_of_day
+
+    @property
+    def entities(self) -> Dict[int, Entity]:
+        """
+        Get all currently tracked entities.
+
+        Returns
+        -------
+        Dict[int, Entity]
+            A dictionary mapping entity IDs to `Entity`.
+        """
+        return self._connection.entities
 
     @property
     def world_border(self) -> Optional[WorldBorder]:
@@ -334,7 +347,7 @@ class Client:
             _logger.error('Event: %s Error: %s', event, error)
 
     @staticmethod
-    async def on_error(packet_id: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
+    async def on_error(event_method: str, error: Exception, /, *args: Any, **kwargs: Any) -> None:
         """
         Handle errors occurring during event dispatch.
 
@@ -342,8 +355,8 @@ class Client:
 
         Parameters
         ----------
-        packet_id: str
-            The packet id of the event that caused the error.
+        event_method: str
+            The event that caused the error.
         error: Exception
             The exception that was raised.
         *args: Any
@@ -351,7 +364,8 @@ class Client:
         **kwargs: Any
             Keyword arguments passed to the event.
         """
-        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, packet_id, args, kwargs)
+        _logger.exception('Ignoring error: %s from %s, args: %s kwargs: %s', error, event_method, args,
+                          kwargs)
 
     def _handle_ready(self) -> None:
         """Signal that the connection is ready."""

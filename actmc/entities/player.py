@@ -30,7 +30,7 @@ from .entity import Living
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Optional, Tuple, Dict
     from ..math import Vector3D, Rotation
-    from ..ui import tab
+    from ..ui import tablist as tab
 
 __all__ = ('Player',)
 
@@ -55,9 +55,9 @@ class Player(Living):
                  position: Vector3D[float],
                  rotation: Rotation,
                  metadata: Dict[int, Any],
-                 tablist: Dict[str, Optional[tab.PlayerInfo]]) -> None:
+                 tablist: Dict[str, tab.PlayerInfo]) -> None:
         super().__init__(entity_id, uuid, position, rotation, metadata)
-        self._tablist: Dict[str, Optional[tab.PlayerInfo]] = tablist
+        self._tablist: Dict[str, tab.PlayerInfo] = tablist
 
     ENTITY_TYPE: ClassVar[str] = 'minecraft:player'
     BOUNDING: ClassVar[Tuple[float, float]] = (0.6, 1.8)

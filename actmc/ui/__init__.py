@@ -7,11 +7,11 @@ A user interface management module for Minecraft UI components.
 :license: MIT, see LICENSE for more details.
 """
 
-from . import actionbar
-from . import advancement
-from . import border
-from . import bossbar
-from . import chat
-from . import gui
-from . import scoreboard
-from . import tablist
+from .actionbar import *
+from .advancement import *
+from .border import *
+from .bossbar import *
+from .chat import *
+from .bossbar import *
+from .scoreboard import *
+from .tablist import *
