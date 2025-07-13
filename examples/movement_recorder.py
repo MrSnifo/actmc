@@ -69,19 +69,15 @@ class Bot(Client):
         then locates the corresponding entity in the world.
         """
         # Find owner UUID in tablist by name
-        owner_uuid = next(
-            (uuid for uuid, player in self.tablist.items()
-             if getattr(player, 'name', '').lower() == self.owner_name.lower()),
-            None
-        )
+        owner_uuid = next((uuid for uuid, player in self.tablist.items()
+                           if player.name.lower() == self.owner_name.lower()), None)
 
         if not owner_uuid:
             print(f"Owner player '{self.owner_name}' not found in tablist")
             return
-
         # Find entity by UUID in world
-        self._entity_id = next((eid for eid, entity in self.entities.items() if isinstance(entity, Player) and
-                                getattr(entity, 'uuid', None) == owner_uuid), None)
+        self._entity_id = next((eid for eid, entity in self.entities.items()
+                                if isinstance(entity, Player) and entity.uuid == owner_uuid), None)
         if self._entity_id:
             print(f"Target locked: {self.owner_name} (Entity ID: {self._entity_id})")
         else:
