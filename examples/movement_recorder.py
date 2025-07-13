@@ -88,7 +88,8 @@ class Bot(Client):
             print(f"Owner found in tablist but not spawned in world (UUID: {owner_uuid})")
 
     async def _start_recording(self, duration: float = None):
-        """Begin recording player movements.
+        """
+        Begin recording player movements.
 
         Parameters
         ----------
