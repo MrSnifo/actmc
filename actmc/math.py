@@ -204,16 +204,16 @@ class Vector3D[T]:
         yield self.y
         yield self.z
 
-    def to_int(self) -> Vector3D[int]:
+    def to_floor(self) -> Vector3D[int]:
         """
-        Convert vector components to integers using truncation.
+        Convert each component of the vector to its floored integer value.
 
         Returns
         -------
         Vector3D[int]
             Vector with integer components
         """
-        return Vector3D(int(self.x), int(self.y), int(self.z))
+        return Vector3D(math.floor(self.x), math.floor(self.y), math.floor(self.z))
 
     def to_2d(self) -> Vector2D[T]:
         """

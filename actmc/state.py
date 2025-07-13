@@ -198,7 +198,7 @@ class ConnectionState:
         try:
             chunk = Chunk(math.Vector2D(chunk_x, chunk_z), ground_up_continuous, primary_bit_mask, chunk_buffer)
             for data in block_entities_data:
-                pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z')).to_int()
+                pos = math.Vector3D(data.pop('x'), data.pop('y'), data.pop('z')).to_floor()
                 entity_id = data.pop('id')
                 chunk_coords, block_pos, section_y = position_to_chunk_relative(pos)
 
@@ -373,7 +373,7 @@ class ConnectionState:
         block_type = block_state_id >> 4
         block_meta = block_state_id & 0xF
 
-        block = Block(block_type, block_meta, math.Vector3D(*position).to_int())
+        block = Block(block_type, block_meta, math.Vector3D(*position).to_floor())
         if self._load_chunks:
             chunk_coords, block_pos, section_y = position_to_chunk_relative(block.position)
             chunk = self.chunks.get(chunk_coords)
@@ -408,7 +408,7 @@ class ConnectionState:
             block_type = block_state_id >> 4
             block_meta = block_state_id & 0xF
 
-            state = Block(block_type, block_meta, math.Vector3D(x, y, z).to_int())
+            state = Block(block_type, block_meta, math.Vector3D(x, y, z).to_floor())
             if self._load_chunks:
                 chunk_coords, block_pos, section_y = position_to_chunk_relative(state.position)
                 chunk = self.chunks.get(chunk_coords)
