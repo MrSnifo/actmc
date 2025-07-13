@@ -57,7 +57,8 @@ class Bot(Client):
             print("Cleared recordings")
 
     async def _set_target(self):
-        """Set recording target to the specified owner player.
+        """
+        Set recording target to the specified owner player.
 
         Matches the owner_name against tablist player info to find the UUID,
         then locates the corresponding entity in the world.
@@ -74,13 +75,8 @@ class Bot(Client):
             return
 
         # Find entity by UUID in world
-        self._entity_id = next(
-            (eid for eid, entity in self.entities.items()
-             if isinstance(entity, Player) and
-             getattr(entity, 'uuid', None) == owner_uuid),
-            None
-        )
-
+        self._entity_id = next((eid for eid, entity in self.entities.items() if isinstance(entity, Player) and
+                                getattr(entity, 'uuid', None) == owner_uuid), None)
         if self._entity_id:
             print(f"Target locked: {self.owner_name} (Entity ID: {self._entity_id})")
         else:
