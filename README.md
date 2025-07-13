@@ -52,7 +52,7 @@ async def on_system_message(message: chat.Message):
 client.run('localhost', 25565)
 ```
 
-## Documentation and Support
+## Documentation
 
 For more detailed instructions,
 visit the [actmc Documentation](https://actmc.readthedocs.io/latest/).

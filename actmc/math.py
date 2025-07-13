@@ -54,6 +54,91 @@ class Vector3D[T]:
         self.y: T = y
         self.z: T = z
 
+    def to_floor(self) -> Vector3D[int]:
+        """
+        Convert each component of the vector to its floored integer value.
+
+        Returns
+        -------
+        Vector3D[int]
+            Vector with integer components
+        """
+        return Vector3D(math.floor(self.x), math.floor(self.y), math.floor(self.z))
+
+    def to_2d(self) -> Vector2D[T]:
+        """
+        Convert a 3D vector to a 2D vector by removing the Y (height) component.
+
+        Returns
+        -------
+        Vector2D[int]
+            A 2D vector with the X and Z components of this vector
+        """
+        return Vector2D(self.x, self.z)
+
+    def magnitude(self) -> float:
+        """
+        Calculate the magnitude (length) of the vector.
+
+        Returns
+        -------
+        float
+            Magnitude of the vector
+        """
+        return math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+
+    def magnitude_squared(self) -> Union[int, float]:
+        """
+        Calculate the squared magnitude of the vector (more efficient than magnitude).
+
+        Returns
+        -------
+        Union[int, float]
+            Squared magnitude of the vector
+        """
+        return self.x * self.x + self.y * self.y + self.z * self.z
+
+    def normalize(self) -> Vector3D[float]:
+        """
+        Return a normalized (unit) vector in the same direction.
+
+        Returns
+        -------
+        Vector3D[float]
+            Normalized vector with magnitude 1, or zero vector if original magnitude is 0
+        """
+        mag = self.magnitude()
+        if mag == 0:
+            return Vector3D(0.0, 0.0, 0.0)
+        return Vector3D(self.x / mag, self.y / mag, self.z / mag)
+
+    def distance_to(self, other: Vector3D[T]) -> float:
+        """
+        Calculate the Euclidean distance to another vector.
+
+        Parameters
+        ----------
+        other: Vector3D[T]
+            Target vector
+
+        Returns
+        -------
+        float
+            Distance between the two vectors
+        """
+        return (self - other).magnitude()
+
+    def copy(self) -> Vector3D[T]:
+        """
+        Return a copy of the vector.
+
+        Returns
+        -------
+        Vector3D[T]
+            A new Vector3D instance with the same components.
+        """
+        return Vector3D(self.x, self.y, self.z)
+
     def __eq__(self, other: Vector3D) -> bool:
         """
         Check equality with another Vector3D.
@@ -204,80 +289,6 @@ class Vector3D[T]:
         yield self.y
         yield self.z
 
-    def to_floor(self) -> Vector3D[int]:
-        """
-        Convert each component of the vector to its floored integer value.
-
-        Returns
-        -------
-        Vector3D[int]
-            Vector with integer components
-        """
-        return Vector3D(math.floor(self.x), math.floor(self.y), math.floor(self.z))
-
-    def to_2d(self) -> Vector2D[T]:
-        """
-        Convert a 3D vector to a 2D vector by removing the Y (height) component.
-
-        Returns
-        -------
-        Vector2D[int]
-            A 2D vector with the X and Z components of this vector
-        """
-        return Vector2D(self.x, self.z)
-
-    def magnitude(self) -> float:
-        """
-        Calculate the magnitude (length) of the vector.
-
-        Returns
-        -------
-        float
-            Magnitude of the vector
-        """
-        return math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
-
-    def magnitude_squared(self) -> Union[int, float]:
-        """
-        Calculate the squared magnitude of the vector (more efficient than magnitude).
-
-        Returns
-        -------
-        Union[int, float]
-            Squared magnitude of the vector
-        """
-        return self.x * self.x + self.y * self.y + self.z * self.z
-
-    def normalize(self) -> Vector3D[float]:
-        """
-        Return a normalized (unit) vector in the same direction.
-
-        Returns
-        -------
-        Vector3D[float]
-            Normalized vector with magnitude 1, or zero vector if original magnitude is 0
-        """
-        mag = self.magnitude()
-        if mag == 0:
-            return Vector3D(0.0, 0.0, 0.0)
-        return Vector3D(self.x / mag, self.y / mag, self.z / mag)
-
-    def distance_to(self, other: Vector3D[T]) -> float:
-        """
-        Calculate the Euclidean distance to another vector.
-
-        Parameters
-        ----------
-        other: Vector3D[T]
-            Target vector
-
-        Returns
-        -------
-        float
-            Distance between the two vectors
-        """
-        return (self - other).magnitude()
-
 
 class Vector2D[T]:
     """
@@ -296,6 +307,80 @@ class Vector2D[T]:
     def __init__(self, x: T = 0, y: T = 0) -> None:
         self.x: T = x
         self.y: T = y
+
+    def to_int(self) -> Vector2D[int]:
+        """
+        Convert vector components to integers using truncation.
+
+        Returns
+        -------
+        Vector2D[int]
+            Vector with integer components
+        """
+        return Vector2D(int(self.x), int(self.y))
+
+    def magnitude(self) -> float:
+        """
+        Calculate the magnitude (length) of the vector.
+
+        Returns
+        -------
+        float
+            Magnitude of the vector
+        """
+        return math.sqrt(self.x * self.x + self.y * self.y)
+
+    def magnitude_squared(self) -> Union[int, float]:
+        """
+        Calculate the squared magnitude of the vector (more efficient than magnitude).
+
+        Returns
+        -------
+        Union[int, float]
+            Squared magnitude of the vector
+        """
+        return self.x * self.x + self.y * self.y
+
+    def normalize(self) -> Vector2D[float]:
+        """
+        Return a normalized (unit) vector in the same direction.
+
+        Returns
+        -------
+        Vector2D[float]
+            Normalized vector with magnitude 1, or zero vector if original magnitude is 0
+        """
+        mag = self.magnitude()
+        if mag == 0:
+            return Vector2D(0.0, 0.0)
+        return Vector2D(self.x / mag, self.y / mag)
+
+    def distance_to(self, other: Vector2D[T]) -> float:
+        """
+        Calculate the Euclidean distance to another vector.
+
+        Parameters
+        ----------
+        other: Vector2D[T]
+            Target vector
+
+        Returns
+        -------
+        float
+            Distance between the two vectors
+        """
+        return (self - other).magnitude()
+
+    def copy(self) -> Vector2D[T]:
+        """
+        Return a copy of the vector.
+
+        Returns
+        -------
+        Vector2D[T]
+            A new Vector2D instance with the same components.
+        """
+        return Vector2D(self.x, self.y)
 
     def __eq__(self, other: Vector2D) -> bool:
         """
@@ -446,69 +531,6 @@ class Vector2D[T]:
         yield self.x
         yield self.y
 
-    def to_int(self) -> Vector2D[int]:
-        """
-        Convert vector components to integers using truncation.
-
-        Returns
-        -------
-        Vector2D[int]
-            Vector with integer components
-        """
-        return Vector2D(int(self.x), int(self.y))
-
-    def magnitude(self) -> float:
-        """
-        Calculate the magnitude (length) of the vector.
-
-        Returns
-        -------
-        float
-            Magnitude of the vector
-        """
-        return math.sqrt(self.x * self.x + self.y * self.y)
-
-    def magnitude_squared(self) -> Union[int, float]:
-        """
-        Calculate the squared magnitude of the vector (more efficient than magnitude).
-
-        Returns
-        -------
-        Union[int, float]
-            Squared magnitude of the vector
-        """
-        return self.x * self.x + self.y * self.y
-
-    def normalize(self) -> Vector2D[float]:
-        """
-        Return a normalized (unit) vector in the same direction.
-
-        Returns
-        -------
-        Vector2D[float]
-            Normalized vector with magnitude 1, or zero vector if original magnitude is 0
-        """
-        mag = self.magnitude()
-        if mag == 0:
-            return Vector2D(0.0, 0.0)
-        return Vector2D(self.x / mag, self.y / mag)
-
-    def distance_to(self, other: Vector2D[T]) -> float:
-        """
-        Calculate the Euclidean distance to another vector.
-
-        Parameters
-        ----------
-        other: Vector2D[T]
-            Target vector
-
-        Returns
-        -------
-        float
-            Distance between the two vectors
-        """
-        return (self - other).magnitude()
-
 
 class Rotation:
     """
@@ -592,6 +614,17 @@ class Rotation:
             New Rotation instance
         """
         return cls(math.degrees(pitch_radians), math.degrees(yaw_radians))
+
+    def copy(self) -> Rotation:
+        """
+        Return a copy of the rotation.
+
+        Returns
+        -------
+        Rotation
+            A new Rotation instance with the same yaw and pitch.
+        """
+        return Rotation(self.yaw, self.pitch)
 
     def __add__(self, other: Rotation) -> Rotation:
         """

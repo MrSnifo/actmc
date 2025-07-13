@@ -373,7 +373,7 @@ class ConnectionState:
         block_type = block_state_id >> 4
         block_meta = block_state_id & 0xF
 
-        block = Block(block_type, block_meta, math.Vector3D(*position).to_floor())
+        block = Block(block_type, block_meta, math.Vector3D(*position))
         if self._load_chunks:
             chunk_coords, block_pos, section_y = position_to_chunk_relative(block.position)
             chunk = self.chunks.get(chunk_coords)
