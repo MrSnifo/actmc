@@ -38,4 +38,12 @@ async def on_entity_head_look(entity: Entity) -> None:
     """Mirror head look."""
     await try_mirror(entity)
 
+@client.event
+async def on_entity_animation(entity: Entity, animation_id: int) -> None:
+    """Mirror Swing main."""
+    if isinstance(entity, Player) and entity.id != client.user.id:
+        # Swing main arm
+        if animation_id == 0:
+            await client.user.swing_arm()
+
 client.run('localhost', 25565)
