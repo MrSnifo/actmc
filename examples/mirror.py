@@ -7,11 +7,11 @@ client = Client('Steve')
 
 @client.event
 async def on_ready():
-    """Bot connected."""
+    """Bot ready."""
     print("Bot is connected and ready!")
 
 async def try_mirror(entity: Entity, on_ground: Optional[bool] = None) -> None:
-    """Mirror player movements and rotations exactly."""
+    """Mirror the given player's position, rotation, sprinting, and sneaking state."""
     if isinstance(entity, Player) and entity.id != client.user.id:
         await client.user.translate(entity.position, entity.rotation, on_ground=on_ground)
         await client.user.sprint(entity.sprinting)
