@@ -21,20 +21,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
-
 from __future__ import annotations
 
+from .math import Vector3D, Vector2D, Rotation
 from typing import TYPE_CHECKING
-from . import math
 import logging
-import time
+import math
 
 if TYPE_CHECKING:
     from typing import Optional, Tuple
 
-__all__ = ('position_to_chunk_relative', 'calculate_block_face', 'ExponentialBackoff', 'setup_logging')
+__all__ = ('position_to_chunk_relative', 'calculate_block_face', 'calculate_rotation', 'setup_logging')
 
-def position_to_chunk_relative(position: math.Vector3D[int]) -> Tuple[math.Vector2D[int], math.Vector3D[int], int]:
+def position_to_chunk_relative(position: Vector3D[int]) -> Tuple[Vector2D[int], Vector3D[int], int]:
     """
     Split absolute world position into chunk, relative block position, and section.
 
@@ -45,7 +44,7 @@ def position_to_chunk_relative(position: math.Vector3D[int]) -> Tuple[math.Vecto
 
     Returns
     -------
-    Tuple[math.Vector2D[int], math.Vector3D[int], int]
+    Tuple[Vector2D[int], Vector3D[int], int]
         Chunk coordinates (chunk_x, chunk_z),
         Relative position in chunk and section (rel_x, rel_y, rel_z),
         Section Y coordinate.
@@ -60,20 +59,20 @@ def position_to_chunk_relative(position: math.Vector3D[int]) -> Tuple[math.Vecto
     section_y, rel_y = y // 16, y % 16
 
     return (
-        math.Vector2D(chunk_x, chunk_z),
-        math.Vector3D(rel_x, rel_y, rel_z),
+        Vector2D(chunk_x, chunk_z),
+        Vector3D(rel_x, rel_y, rel_z),
         section_y
     )
 
 
-def calculate_block_face(player: math.Vector3D[float], block: math.Vector3D[int]) -> int:
+def calculate_block_face(observer: Vector3D[float], block: Vector3D[int]) -> int:
     """
-    Calculate which face of a block the player is most likely targeting.
+    Calculate which face of a block the observer is most likely targeting.
 
     Parameters
     ----------
-    player: Vector3D[float]
-        Player's current position (usually eye level).
+    observer: Vector3D[float]
+        Observer's current position (usually eye level).
     block: Vector3D[int]
         Block position (x, y, z).
 
@@ -88,15 +87,9 @@ def calculate_block_face(player: math.Vector3D[float], block: math.Vector3D[int]
         - 4: west
         - 5: east
     """
-
-    center_x = block.x + 0.5
-    center_y = block.y + 0.5
-    center_z = block.z + 0.5
-
-    dx = player.x - center_x
-    dy = player.y - center_y
-    dz = player.z - center_z
-
+    dx = observer.x - (block.x + 0.5)
+    dy = observer.y - (block.y + 0.5)
+    dz = observer.z - (block.z + 0.5)
 
     abs_dx = abs(dx)
     abs_dy = abs(dy)
@@ -110,51 +103,39 @@ def calculate_block_face(player: math.Vector3D[float], block: math.Vector3D[int]
         return 2 if dz < 0 else 3
 
 
-class ExponentialBackoff:
+def calculate_rotation(from_pos: Vector3D, to_pos: Vector3D) -> Rotation:
     """
-    Handles retry intervals with exponential backoff.
+    Calculates the yaw and pitch rotation to look from one position to another.
 
     Parameters
     ----------
-    base_delay: int
-        The initial delay in seconds. The delay starts at this value and increases
-        exponentially with each retry.
-    max_delay: int
-        The maximum delay between retries. The exponential increase is capped
-        at this value.
-    reset_interval: int
-        The period in seconds after which the retry count is reset if no errors occur.
+    from_pos : Vector3D
+        The origin position (e.g., the bot's position).
+    to_pos : Vector3D
+        The target position (e.g., a player's position).
+
+    Returns
+    -------
+    Rotation
+        A Rotation object with yaw and pitch.
     """
+    dx = to_pos.x - from_pos.x
+    dy = to_pos.y - from_pos.y
+    dz = to_pos.z - from_pos.z
 
-    __slots__ = ('base_delay', 'max_delay', 'reset_interval', 'retry_count', 'last_failure_time')
+    distance_xz = math.sqrt(dx * dx + dz * dz)
 
-    def __init__(self, base_delay: int = 1, max_delay: int = 180, reset_interval: int = 300) -> None:
-        self.base_delay: int = base_delay
-        self.max_delay: int = max_delay
-        self.reset_interval: int = reset_interval
-        self.retry_count: int = 0
-        self.last_failure_time: float = time.monotonic()
+    # Avoid division by zero
+    if distance_xz == 0:
+        pitch = -90 if dy > 0 else 90
+    else:
+        pitch = -math.degrees(math.atan2(dy, distance_xz))
 
-    def get_delay(self) -> int:
-        """
+    yaw = math.degrees(math.atan2(-dx, dz))  # Minecraft yaw: -X is positive yaw
+    yaw = (yaw + 360) % 360  # Normalize to [0, 360)
 
-        Determine the delay before the next retry attempt.
+    return Rotation(yaw, pitch)
 
-        Returns
-        -------
-        int
-            The delay in seconds before the next retry attempt.
-        """
-        current_time = time.monotonic()
-        elapsed_time = current_time - self.last_failure_time
-
-        if elapsed_time > self.reset_interval:
-            self.retry_count = 0
-
-        delay = min(self.base_delay * 2 ** self.retry_count, self.max_delay)
-        self.retry_count += 1
-        self.last_failure_time = current_time
-        return delay
 
 LOGGER_TRACE: int = 5
 logging.addLevelName(LOGGER_TRACE, 'TRACE')
