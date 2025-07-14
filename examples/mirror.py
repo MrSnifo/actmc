@@ -13,8 +13,10 @@ async def on_ready():
 async def try_mirror(entity: Entity, on_ground: Optional[bool] = None) -> None:
     """Mirror player movements and rotations exactly."""
     if isinstance(entity, Player) and entity.id != client.user.id:
-        # Mirror the exact position and rotation
         await client.user.translate(entity.position, entity.rotation, on_ground=on_ground)
+        await client.user.sprint(entity.sprinting)
+        await client.user.sneak(entity.crouched)
+
 
 @client.event
 async def on_entity_move_look(entity: Entity, _, on_ground: bool) -> None:

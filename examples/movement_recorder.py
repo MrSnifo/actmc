@@ -1,10 +1,10 @@
-
 from actmc.entities.player import Player
 from actmc.entities.entity import Entity
 from actmc.ui import Message
 from actmc import Client
 import asyncio
 import time
+
 
 class Bot(Client):
     """
@@ -150,11 +150,20 @@ class Bot(Client):
             for i, rec in enumerate(self.records):
                 if i > 0:
                     await asyncio.sleep(rec['time_since_last'])
+
+                # Apply movement
                 await self.user.translate(
                     position=rec['position'],
                     rotation=rec.get('rotation'),
                     on_ground=rec.get('on_ground', True)
                 )
+
+                # Apply sprint/sneak states
+                if 'sprinting' in rec:
+                    await self.user.sprint(rec['sprinting'])
+                if 'crouched' in rec:
+                    await self.user.sneak(rec['crouched'])
+
         finally:
             self.playing = False
             duration = time.time() - start
@@ -166,13 +175,21 @@ class Bot(Client):
             return
 
         now = time.time()
-        self.records.append({
+        record = {
             'position': entity.position,
             'rotation': getattr(entity, 'rotation', None),
             'on_ground': on_ground,
             'timestamp': now - self._record_start_time,
             'time_since_last': now - (self._last_record_time or now)
-        })
+        }
+
+        # Add sprint/sneak states if available
+        if hasattr(entity, 'sprinting'):
+            record['sprinting'] = entity.sprinting
+        if hasattr(entity, 'crouched'):
+            record['crouched'] = entity.crouched
+
+        self.records.append(record)
         self._last_record_time = now
 
     # Event handlers
