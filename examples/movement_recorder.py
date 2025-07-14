@@ -175,20 +175,13 @@ class Bot(Client):
             return
 
         now = time.time()
-        record = {
-            'position': entity.position,
-            'rotation': getattr(entity, 'rotation', None),
-            'on_ground': on_ground,
-            'timestamp': now - self._record_start_time,
-            'time_since_last': now - (self._last_record_time or now)
-        }
-
-        # Add sprint/sneak states if available
-        if hasattr(entity, 'sprinting'):
-            record['sprinting'] = entity.sprinting
-        if hasattr(entity, 'crouched'):
-            record['crouched'] = entity.crouched
-
+        record = {'position': entity.position,
+                  'rotation': getattr(entity, 'rotation', None),
+                  'on_ground': on_ground,
+                  'timestamp': now - self._record_start_time,
+                  'time_since_last': now - (self._last_record_time or now),
+                  'sprinting': entity.sprinting,
+                  'crouched': entity.crouched}
         self.records.append(record)
         self._last_record_time = now
 
