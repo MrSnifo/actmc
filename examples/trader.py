@@ -36,36 +36,36 @@ class Trader(Client):
 
     async def _drop_items(self, item_id: int, count: int) -> int:
         """Drop up to `count` items with the given `item_id`."""
-        dropped = 0
-        slots = [s for s in self.user.inventory.slots if s.item and s.item.id == item_id]
+        async with self._trading_lock:
+            dropped = 0
+            slots = [s for s in self.user.inventory.slots if s.item and s.item.id == item_id]
 
-        # Sort by count (full stacks first)
-        slots.sort(key=lambda s: s.item.count, reverse=True)
+            # Sort by count (full stacks first)
+            slots.sort(key=lambda s: s.item.count, reverse=True)
 
-        for slot in slots:
-            if dropped >= count:
-                break
+            for slot in slots:
+                if dropped >= count:
+                    break
 
-            item = slot.item
-            if item.count == 64:
-                await self.drop_item(self.user.inventory, slot.index, drop_stack=True)
-                await asyncio.sleep(0.15)
-                dropped += 64
-            else:
-                to_drop = min(item.count, count - dropped)
-                for _ in range(to_drop):
-                    await self.drop_item(self.user.inventory, slot.index)
+                item = slot.item
+                if item.count == 64:
+                    await self.drop_item(self.user.inventory, slot.index, drop_stack=True)
                     await asyncio.sleep(0.15)
-                    dropped += 1
-        return count - dropped
+                    dropped += 64
+                else:
+                    to_drop = min(item.count, count - dropped)
+                    for _ in range(to_drop):
+                        await self.drop_item(self.user.inventory, slot.index)
+                        await asyncio.sleep(0.15)
+                        dropped += 1
+            return count - dropped
 
     async def perform_trade(self, count: int):
         """Perform a trade with concurrency control."""
-        async with self._trading_lock:
-            left = await self._drop_items(self.trade_item_id, count)
-            if left > 0:
-                print("[Trade] Not enough trade items. Dropping fallback items.")
-                await self._drop_items(self.item_id, left)
+        left = await self._drop_items(self.trade_item_id, count)
+        if left > 0:
+            print("[Trade] Not enough trade items. Dropping fallback items.")
+            await self._drop_items(self.item_id, left)
 
     async def on_entity_head_look(self, *_):
         """Called when any entity updates head rotation."""
