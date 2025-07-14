@@ -278,7 +278,16 @@
 
 ## Entity Interactions
 
+
+
 ### Collect Item
+
+???+ Warning
+
+    This event does not synchronously update the entity's inventory state. 
+    Inventory access within this event handler may reflect stale data. For accurate inventory 
+    tracking, use [on_window_items_updated](ui/gui.md#window-items-updated) instead.
+
 - **Description**: Item collected by entity
 - **Parameters**:
   - `collected`: [`Entity`][actmc.entities.entity.Entity] - The collected item
