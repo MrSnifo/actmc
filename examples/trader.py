@@ -12,8 +12,10 @@ class Trader(Client):
     def __init__(self, username: str):
         super().__init__(username)
         self.look_distance = 4.0
-        self.item_id, self.trade_item_id = 260, 322  # Apple => Golden Apple
+        # Apple => Golden Apple
+        self.item_id, self.trade_item_id = 260, 322
         self._trading_lock = asyncio.Lock()
+        self._pending_trades = 0
 
     async def on_join(self):
         """Called when the bot joins the server."""
@@ -56,15 +58,15 @@ class Trader(Client):
                     await self.drop_item(self.user.inventory, slot.index)
                     await asyncio.sleep(0.15)
                     dropped += 1
-
         return count - dropped
 
     async def perform_trade(self, count: int):
         """Perform a trade with concurrency control."""
-        left = await self._drop_items(self.trade_item_id, count)
-        if left > 0:
-            print("[Trade] Not enough trade items. Dropping fallback items.")
-            await self._drop_items(self.item_id, left)
+        async with self._trading_lock:
+            left = await self._drop_items(self.trade_item_id, count)
+            if left > 0:
+                print("[Trade] Not enough trade items. Dropping fallback items.")
+                await self._drop_items(self.item_id, left)
 
     async def on_entity_head_look(self, *_):
         """Called when any entity updates head rotation."""
@@ -72,18 +74,26 @@ class Trader(Client):
 
     async def on_collect_item(self, collected: Entity, count: int, collector: Entity) -> None:
         """Called when an item is collected by an entity."""
-        if (isinstance(collected, DroppedItem) and
-            collector.id == self.user.id and
-            collected.item.id == self.item_id):
-            async with self._trading_lock:
-                await self.perform_trade(count)
+        if isinstance(collected, DroppedItem) and collector.id == self.user.id and collected.item.id == self.item_id:
+            self._pending_trades += count
+            print(f"[Collect] Queued {count} trade(s). Total pending: {self._pending_trades}")
 
     async def on_window_items_updated(self, window: Window) -> None:
         """Called when inventory window items are updated."""
-        if window.id == self.user.inventory.id:
-            for slot in window.slots:
-                if slot.item and slot.item.id not in {self.trade_item_id, self.item_id}:
-                    await self._drop_items(slot.item.id, slot.item.count)
+        if window.id != self.user.inventory.id:
+            return
+
+        # Drop unrelated items
+        for slot in window.slots:
+            if slot.item and slot.item.id not in {self.trade_item_id, self.item_id}:
+                await self._drop_items(slot.item.id, slot.item.count)
+
+        # Process queued trades
+        if self._pending_trades > 0:
+            count = self._pending_trades
+            self._pending_trades = 0
+            print(f"[Trade] Performing {count} trade(s)")
+            await self.perform_trade(count)
 
 bot = Trader('Steve')
 bot.run('localhost')
