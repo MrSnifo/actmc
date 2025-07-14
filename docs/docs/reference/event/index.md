@@ -1,4 +1,4 @@
-# Events in ACTMC
+# Introduction
 
 Events in **actmc** let your bot react to things happening in Minecraft.
 Think of them as notifications that tell your code "Hey, something just happened!".
