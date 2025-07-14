@@ -315,7 +315,7 @@ class AreaEffectCloud(Entity):
         Returns
         -------
         bool
-            True if should show as single point.
+            True if you should show as single point.
         """
         return bool(self.get_metadata_value(8, False))
 
@@ -404,7 +404,7 @@ class ArmorStand(Living):
         Returns
         -------
         bool
-            True if has arms.
+            True if it has arms.
         """
         return bool(self._armor_stand_bit_mask & 0x04)
 

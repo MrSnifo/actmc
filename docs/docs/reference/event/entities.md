@@ -82,6 +82,11 @@
 
 ## Entity Movement
 
+???+ warning
+
+    The Y position of an entity is not always a reliable indicator of whether it's on the ground.
+    Always use the `on_ground` parameter for accurate ground detection.
+
 ### Entity Move
 - **Description**: Entity moved
 - **Parameters**:

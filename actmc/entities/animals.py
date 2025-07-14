@@ -107,7 +107,7 @@ class AbstractHorse(Ageable):
         Returns
         -------
         bool
-            True if has bred, False otherwise.
+            True if it has bred, False otherwise.
         """
         return bool(self._horse_bit_mask & 0x08)
 

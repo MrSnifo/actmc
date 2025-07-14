@@ -780,7 +780,7 @@ class StructureBlock(BaseEntity[str]):
     @property
     def is_save_mode(self) -> bool:
         """
-        Check if structure block is in save mode.
+        Check if structure block is in save-mode.
 
         Returns
         -------

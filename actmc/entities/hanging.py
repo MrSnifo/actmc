@@ -138,35 +138,6 @@ class Painting(Hanging):
     ENTITY_TYPE: ClassVar[str] = 'minecraft:painting'
     BOUNDING: ClassVar[Tuple[float, float]] = (0.0625, 1.0)  # Dynamic based on type
 
-    PAINTING_TYPES: ClassVar[Dict[str, Dict[str, int]]] = {
-        "Kebab": {"width": 1, "height": 1},
-        "Aztec": {"width": 1, "height": 1},
-        "Alban": {"width": 1, "height": 1},
-        "Aztec2": {"width": 1, "height": 1},
-        "Bomb": {"width": 1, "height": 1},
-        "Plant": {"width": 1, "height": 1},
-        "Wasteland": {"width": 1, "height": 1},
-        "Pool": {"width": 2, "height": 1},
-        "Courbet": {"width": 2, "height": 1},
-        "Sea": {"width": 2, "height": 1},
-        "Sunset": {"width": 2, "height": 1},
-        "Creebet": {"width": 2, "height": 1},
-        "Wanderer": {"width": 1, "height": 2},
-        "Graham": {"width": 1, "height": 2},
-        "Match": {"width": 2, "height": 2},
-        "Bust": {"width": 2, "height": 2},
-        "Stage": {"width": 2, "height": 2},
-        "Void": {"width": 2, "height": 2},
-        "SkullAndRoses": {"width": 2, "height": 2},
-        "Wither": {"width": 2, "height": 2},
-        "Fighters": {"width": 4, "height": 2},
-        "Pointer": {"width": 4, "height": 4},
-        "Pigscene": {"width": 4, "height": 4},
-        "BurningSkull": {"width": 4, "height": 4},
-        "Skeleton": {"width": 4, "height": 3},
-        "DonkeyKong": {"width": 4, "height": 3},
-    }
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._painting_type: Optional[str] = None
@@ -183,46 +154,6 @@ class Painting(Hanging):
         """
         return self._painting_type
 
-    @property
-    def painting_width(self) -> int:
-        """
-        Get the width of the painting in blocks.
-
-        Returns
-        -------
-        int
-            Width of the painting in blocks. Defaults to 1 if unknown.
-        """
-        if self._painting_type and self._painting_type in self.PAINTING_TYPES:
-            return self.PAINTING_TYPES[self._painting_type]["width"]
-        return 1
-
-    @property
-    def painting_height(self) -> int:
-        """
-        Get the height of the painting in blocks.
-
-        Returns
-        -------
-        int
-            Height of the painting in blocks. Defaults to 1 if unknown.
-        """
-        if self._painting_type and self._painting_type in self.PAINTING_TYPES:
-            return self.PAINTING_TYPES[self._painting_type]["height"]
-        return 1
-
-    @property
-    def is_large_painting(self) -> bool:
-        """
-        Determine if the painting is larger than 1x1 blocks.
-
-        Returns
-        -------
-        bool
-            True if either width or height is greater than 1 block.
-        """
-        return self.painting_width > 1 or self.painting_height > 1
-
     def set_painting_type(self, painting_name: str) -> None:
         """
         Set the painting type by name.
@@ -231,12 +162,5 @@ class Painting(Hanging):
         ----------
         painting_name : str
             Name of the painting type to set.
-
-        Raises
-        ------
-        ValueError
-            If the painting_name is not a valid painting.
         """
-        if painting_name not in self.PAINTING_TYPES:
-            raise ValueError(f"Invalid painting name: {painting_name}")
         self._painting_type = painting_name
