@@ -475,7 +475,7 @@ class TcpClient:
         return self.write_packet(0x06, buffer)
 
     def click_window(self, window_id: int, slot: int, button: int, action_number: int,
-                     mode: int, clicked_item: Optional[misc.ItemData] = None) -> Coroutine[Any, Any, None]:
+                     mode: int, clicked_item: Optional[misc.Item] = None) -> Coroutine[Any, Any, None]:
         """Send click window packet when player clicks on a slot in a window."""
         if not (0 <= button <= 10):
             raise InvalidDataError("Button must be between 0 and 10")
@@ -494,13 +494,13 @@ class TcpClient:
             buffer.write(protocol.pack_short(-1))
         else:
             # Set item with all properties
-            buffer.write(protocol.pack_short(clicked_item['item_id']))
-            buffer.write(protocol.pack_byte(clicked_item['item_count']))
-            buffer.write(protocol.pack_short(clicked_item['item_damage']))
-            if clicked_item.get('nbt') is None:
+            buffer.write(protocol.pack_short(clicked_item.id))
+            buffer.write(protocol.pack_byte(clicked_item.count))
+            buffer.write(protocol.pack_short(clicked_item.damage))
+            if clicked_item.nbt is None:
                 buffer.write(protocol.pack_byte(0))
             else:
-                nbt_data = protocol.pack_nbt(clicked_item['nbt'])
+                nbt_data = protocol.pack_nbt(clicked_item.nbt)
                 buffer.write(nbt_data)
 
         return self.write_packet(0x07, buffer)

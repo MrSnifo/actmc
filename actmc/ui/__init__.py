@@ -12,6 +12,6 @@ from .advancement import *
 from .border import *
 from .bossbar import *
 from .chat import *
-from .bossbar import *
+from .gui import *
 from .scoreboard import *
 from .tablist import *

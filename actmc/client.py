@@ -849,6 +849,12 @@ class Client:
         drop_stack: bool
             Whether to drop the entire stack or just one item.
             When True, drops all items in the slot. When False, drops only one item.
+
+        Warning
+        -------
+        Implement appropriate rate limiting between consecutive calls to prevent
+        server-side rejection. Excessive rapid invocations may result in dropped
+        packets and failed item operations.
         """
         button = 1 if drop_stack else 0
         action_number = window.get_next_action_number()
