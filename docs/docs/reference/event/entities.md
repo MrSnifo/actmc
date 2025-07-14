@@ -235,17 +235,41 @@
 
 ## Entity Effects
 
+<div class="grid" markdown>
+
+<div markdown>
 ### Entity Animation
-- **Description**: Entity animation played
-- **Parameters**:
-  - `entity`: [`Entity`][actmc.entities.entity.Entity] - The entity
-  - `animation_id`: [`int`][int] - Animation ID
-- **Usage**:
-  ```python
-  @client.event
-  async def on_entity_animation(entity: Entity, animation_id: int) -> None:
-      ...
-  ```
+
+* **Description**: Entity animation played
+* **Parameters**:
+  * `entity`: [`Entity`][actmc.entities.entity.Entity] – The entity  
+  * `animation_id`: [`int`][int] – Animation ID
+
+  
+<br><br><br><br><br><br><br>
+  * **Usage**:
+</div>
+
+<div markdown>
+### Animation IDs
+
+| ID | Animation             |
+|----|------------------------|
+| 0  | Swing main arm        |
+| 1  | Take damage           |
+| 2  | Leave bed             |
+| 3  | Swing offhand         |
+| 4  | Critical effect       |
+| 5  | Magic critical effect |
+</div>
+
+</div>
+```python
+@client.event
+async def on_entity_animation(entity: Entity, animation_id: int) -> None:
+    ...
+```
+
 
 ### Entity Effect
 - **Description**: Entity effect applied
