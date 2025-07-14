@@ -39,7 +39,7 @@ $ python3 -m pip install -U .
 from actmc import Client
 from actmc.ui import chat
 
-client = Client(username='steve')
+client = Client(username='Steve')
 
 @client.event
 async def on_ready():
