@@ -23,8 +23,7 @@ class Trader(Client):
 
     async def _look_at_closest_player(self):
         """Find the closest player within range and look at them."""
-        players = [e for e in self.entities.values()
-                  if isinstance(e, Player) and e.uuid != self.user.uuid]
+        players = [e for e in self.entities.values() if isinstance(e, Player) and e.uuid != self.user.uuid]
         if not players:
             return
 
