@@ -14,12 +14,17 @@ class AutoTurret(Client):
     ----------
     username: str
         Bot username
-    range_distance: float, default=12
+    range_distance: float
         Maximum targeting range in blocks
-    whitelist: Optional[List[str]], default=None
+    whitelist: Optional[List[str]]
         Player names to never target. None = no players, [] = all players
-    target_all: bool, default=False
+    target_all: bool
         Target all living entities vs monsters only
+
+    Notes
+    -----
+    - Requires bow and arrows in inventory to operate.
+    - The bow will be automatically equipped when shooting.
     """
 
     def __init__(self, username: str, range_distance: float = 12,
