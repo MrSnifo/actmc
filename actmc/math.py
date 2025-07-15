@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 import math
 
 if TYPE_CHECKING:
-    from typing import TypeVar, Union, Tuple, Iterator
+    from typing import TypeVar, Union, Tuple, Iterator, List
     T = TypeVar('T', int, float, default=Union[int, float])
 
 __all__ = ('Vector3D', 'Vector2D', 'Rotation')
@@ -138,6 +138,175 @@ class Vector3D[T]:
             A new Vector3D instance with the same components.
         """
         return Vector3D(self.x, self.y, self.z)
+
+    def dot(self, other: Vector3D[T]) -> float:
+        """
+        Calculate the dot product with another vector.
+
+        Parameters
+        ----------
+        other : Vector3D[T]
+            The other vector
+
+        Returns
+        -------
+        float
+            The dot product result
+        """
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
+    def cross(self, other: Vector3D[T]) -> Vector3D[float]:
+        """
+        Calculate the cross product with another vector.
+
+        Parameters
+        ----------
+        other : Vector3D[T]
+            The other vector
+
+        Returns
+        -------
+        Vector3D[float]
+            The cross product result
+        """
+        return Vector3D(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x
+        )
+
+    def is_zero(self, tolerance: float = 1e-6) -> bool:
+        """
+        Check if vector is approximately zero within tolerance.
+
+        Parameters
+        ----------
+        tolerance : float, optional
+            Tolerance for zero check (default: 1e-6)
+
+        Returns
+        -------
+        bool
+            True if vector magnitude is below tolerance
+        """
+        return self.magnitude() < tolerance
+
+    def lerp(self, other: Vector3D[T], t: float) -> Vector3D[float]:
+        """
+        Linear interpolation between this vector and another.
+
+        Parameters
+        ----------
+        other : Vector3D[T]
+            Target vector
+        t : float
+            Interpolation factor (0.0 = this vector, 1.0 = other vector)
+
+        Returns
+        -------
+        Vector3D[float]
+            Interpolated vector
+        """
+        return self + (other - self) * t
+
+    def clamp_magnitude(self, max_magnitude: float) -> Vector3D[float]:
+        """
+        Clamp vector magnitude to maximum value.
+
+        Parameters
+        ----------
+        max_magnitude : float
+            Maximum allowed magnitude
+
+        Returns
+        -------
+        Vector3D[float]
+            Vector with clamped magnitude
+        """
+        mag = self.magnitude()
+        if mag > max_magnitude:
+            return self.normalize() * max_magnitude
+        return Vector3D(float(self.x), float(self.y), float(self.z))
+
+    def angle_to(self, other: Vector3D[T]) -> float:
+        """
+        Calculate the angle between this vector and another in radians.
+
+        Parameters
+        ----------
+        other : Vector3D[T]
+            Target vector
+
+        Returns
+        -------
+        float
+            Angle in radians (0 to π)
+        """
+        dot_product = self.dot(other)
+        mag_product = self.magnitude() * other.magnitude()
+        if mag_product == 0:
+            return 0.0
+        return math.acos(max(-1.0, min(1.0, dot_product / mag_product)))
+
+    def project_onto(self, other: Vector3D[T]) -> Vector3D[float]:
+        """
+        Project this vector onto another vector.
+
+        Parameters
+        ----------
+        other : Vector3D[T]
+            Vector to project onto
+
+        Returns
+        -------
+        Vector3D[float]
+            Projected vector
+        """
+        other_mag_sq = other.magnitude_squared()
+        if other_mag_sq == 0:
+            return Vector3D(0.0, 0.0, 0.0)
+        return other * (self.dot(other) / other_mag_sq)
+
+    def reflect(self, normal: Vector3D[T]) -> Vector3D[float]:
+        """
+        Reflect this vector across a surface with given normal.
+
+        Parameters
+        ----------
+        normal : Vector3D[T]
+            Surface normal vector (should be normalized)
+
+        Returns
+        -------
+        Vector3D[float]
+            Reflected vector
+        """
+        return self - normal * (2 * self.dot(normal))
+
+    @staticmethod
+    def average(vectors: List[Vector3D[T]]) -> Vector3D[float]:
+        """
+        Calculate the average of multiple vectors.
+
+        Parameters
+        ----------
+        vectors : List[Vector3D[T]]
+            List of vectors to average
+
+        Returns
+        -------
+        Vector3D[float]
+            Average vector, or zero vector if list is empty
+        """
+        if not vectors:
+            return Vector3D(0.0, 0.0, 0.0)
+
+        count = len(vectors)
+        total_x = sum(v.x for v in vectors)
+        total_y = sum(v.y for v in vectors)
+        total_z = sum(v.z for v in vectors)
+
+        return Vector3D(total_x / count, total_y / count, total_z / count)
 
     def __eq__(self, other: Vector3D) -> bool:
         """
@@ -381,6 +550,99 @@ class Vector2D[T]:
             A new Vector2D instance with the same components.
         """
         return Vector2D(self.x, self.y)
+
+    def dot(self, other: Vector2D[T]) -> float:
+        """
+        Calculate the dot product with another vector.
+
+        Parameters
+        ----------
+        other : Vector2D[T]
+            The other vector
+
+        Returns
+        -------
+        float
+            The dot product result
+        """
+        return self.x * other.x + self.y * other.y
+
+    def is_zero(self, tolerance: float = 1e-6) -> bool:
+        """
+        Check if vector is approximately zero within tolerance.
+
+        Parameters
+        ----------
+        tolerance : float, optional
+            Tolerance for zero check (default: 1e-6)
+
+        Returns
+        -------
+        bool
+            True if vector magnitude is below tolerance
+        """
+        return self.magnitude() < tolerance
+
+    def lerp(self, other: Vector2D[T], t: float) -> Vector2D[float]:
+        """
+        Linear interpolation between this vector and another.
+
+        Parameters
+        ----------
+        other : Vector2D[T]
+            Target vector
+        t : float
+            Interpolation factor (0.0 = this vector, 1.0 = other vector)
+
+        Returns
+        -------
+        Vector2D[float]
+            Interpolated vector
+        """
+        return self + (other - self) * t
+
+    def clamp_magnitude(self, max_magnitude: float) -> Vector2D[float]:
+        """
+        Clamp vector magnitude to maximum value.
+
+        Parameters
+        ----------
+        max_magnitude : float
+            Maximum allowed magnitude
+
+        Returns
+        -------
+        Vector2D[float]
+            Vector with clamped magnitude
+        """
+        mag = self.magnitude()
+        if mag > max_magnitude:
+            return self.normalize() * max_magnitude
+        return Vector2D(float(self.x), float(self.y))
+
+    @staticmethod
+    def average(vectors: List[Vector2D[T]]) -> Vector2D[float]:
+        """
+        Calculate the average of multiple vectors.
+
+        Parameters
+        ----------
+        vectors : List[Vector2D[T]]
+            List of vectors to average
+
+        Returns
+        -------
+        Vector2D[float]
+            Average vector, or zero vector if list is empty
+        """
+        if not vectors:
+            return Vector2D(0.0, 0.0)
+
+        count = len(vectors)
+        total_x = sum(v.x for v in vectors)
+        total_y = sum(v.y for v in vectors)
+
+        return Vector2D(total_x / count, total_y / count)
 
     def __eq__(self, other: Vector2D) -> bool:
         """
