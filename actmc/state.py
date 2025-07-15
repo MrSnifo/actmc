@@ -141,10 +141,8 @@ class ConnectionState:
     async def parse(self, packet_id: int, buffer: protocol.ProtocolBuffer) -> None:
         """Parse incoming packet by ID and dispatch to appropriate handler."""
         try:
-            parser_name = self._packet_parsers.get(packet_id)
-            if parser_name:
-                func = getattr(self, parser_name)
-                await func(buffer)
+            func = getattr(self, self._packet_parsers[packet_id])
+            await func(buffer)
         except Exception as error:
             _logger.exception(f"Failed to parse packet 0x{packet_id:02X}: {error}")
             self._dispatch('error', packet_id, error)
@@ -642,6 +640,7 @@ class ConnectionState:
         attached_entity_id = protocol.read_int(buffer)
         holding_entity_id = protocol.read_int(buffer)
         self._dispatch('entity_leash', attached_entity_id, holding_entity_id)
+
 
     async def parse_0x3f(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Equipment packet (0x3F)"""
