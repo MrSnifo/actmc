@@ -7,23 +7,23 @@ An entity management module for Minecraft entities
 :license: MIT, see LICENSE for more details.
 """
 
-from . import ambient
-from . import animals
-from . import aquatic
-from . import blocks
-from . import dragons
-from . import entity
-from . import flying
-from . import golems
-from . import hanging
-from . import illagers
-from . import misc
-from . import monsters
-from . import player
-from . import projectiles
-from . import tameable
-from . import vehicles
-from . import villagers
+from .ambient import *
+from .animals import *
+from .aquatic import *
+from .blocks import *
+from .dragons import *
+from .entity import *
+from .flying import *
+from .golems import *
+from .hanging import *
+from .illagers import *
+from .misc import *
+from .monsters import *
+from .player import *
+from .projectiles import *
+from .tameable import *
+from .vehicles import *
+from .villagers import *
 
 BLOCK_ENTITY_TYPES = {
     'minecraft:bed': blocks.Bed,
