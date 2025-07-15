@@ -156,7 +156,7 @@
 ### Sound Effect
 - **Description**: Sound effect played
 - **Parameters**:
-  - `sound_id`: [`int`][int] - Sound ID
+  - `sound_id`: [`int`][int] - [Sound ID](https://pokechu22.github.io/Burger/1.12.2.html#sounds)
   - `category`: [`int`][int] - Sound category
   - `position`: [`Vector3D`][actmc.math.Vector3D] - Sound location
   - `volume`: [`float`][float] - Playback volume (0.0-1.0)
