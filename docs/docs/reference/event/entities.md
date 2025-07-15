@@ -325,7 +325,7 @@ async def on_entity_animation(entity: Entity, animation_id: int) -> None:
 - **Description**: Entity effect applied
 - **Parameters**:
   - `entity`: [`Entity`][actmc.entities.entity.Entity] - The entity
-  - `effect_id`: [`int`][int] - Effect ID
+  - `effect_id`: [`int`][int] - [Effect ID](https://minecraft.fandom.com/wiki/Effect)
   - `amplifier`: [`int`][int] - Effect strength
   - `duration`: [`int`][int] - Effect duration (ticks)
   - `is_ambient`: [`bool`][bool] - If effect is ambient
