@@ -89,6 +89,29 @@
 | 7            | North       |
 | 8            | North-West  |
 
+#### Special Cases
+
+**Play Record (ID 1010)**: Use a valid Record ID to start a record or overwrite a currently playing one. Any other value will stop the record.
+
+### Particle
+
+- **Description**: Particle effect
+- **Parameters**:
+  - `particle_id`: [`int`][int] - [Particle ID](#particle-ids)
+  - `long_distance`: [`bool`][bool] - Long distance rendering (increases range from 256 to 65536)
+  - `position`: [`Vector3D`][actmc.math.Vector3D] - Particle origin
+  - `offset`: [`Vector3D`][actmc.math.Vector3D] - Particle spread (multiplied by random.nextGaussian())
+  - `data`: [`float`][float] - Particle data
+  - `count`: [`int`][int] - Particle count
+  - `extra`: [`List`][typing.List][[`int`][int]] - Additional particle data (length varies by particle type)
+- **Usage**:
+  ```python
+  @client.event
+  async def on_particle(particle_id: int, long_distance: bool, position: Vector3D, offset: Vector3D,
+                   data: float, count: int, extra: List[int]) -> None:
+      ...
+  ```
+
 #### Particle IDs
 
 | Particle Name              | ID | Extra Data Length |
