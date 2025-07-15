@@ -13,7 +13,7 @@ class Fisher(Client):
         """Called when the bot joins the server and ready."""
         await self.user.use_item()
 
-    async def on_sound_effect(self, sound_id: int, _: int, position: Vector3D, *__) -> None:
+    async def on_sound_effect(self, sound_id: int, _, position: Vector3D, *__) -> None:
         """Handle sound effects from the game."""
         # Check for bobber splash sound (ID 153 = fish bite)
         if sound_id == 153:
