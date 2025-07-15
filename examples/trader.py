@@ -1,7 +1,5 @@
-from actmc.entities.misc import DroppedItem
+from actmc.entities import Player, Entity, DroppedItem
 from actmc.utils import calculate_rotation
-from actmc.entities.entity import Entity
-from actmc.entities.player import Player
 from actmc.ui import Window
 from actmc import Client
 import asyncio
