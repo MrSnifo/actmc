@@ -109,9 +109,9 @@ def calculate_rotation(from_pos: Vector3D, to_pos: Vector3D) -> Rotation:
 
     Parameters
     ----------
-    from_pos : Vector3D
+    from_pos: Vector3D
         The origin position (e.g., the bot's position).
-    to_pos : Vector3D
+    to_pos: Vector3D
         The target position (e.g., a player's position).
 
     Returns
@@ -125,14 +125,13 @@ def calculate_rotation(from_pos: Vector3D, to_pos: Vector3D) -> Rotation:
 
     distance_xz = math.sqrt(dx * dx + dz * dz)
 
-    # Avoid division by zero
     if distance_xz == 0:
         pitch = -90 if dy > 0 else 90
     else:
         pitch = -math.degrees(math.atan2(dy, distance_xz))
 
-    yaw = math.degrees(math.atan2(-dx, dz))  # Minecraft yaw: -X is positive yaw
-    yaw = (yaw + 360) % 360  # Normalize to [0, 360)
+    yaw = math.degrees(math.atan2(-dx, dz))
+    yaw = (yaw + 360) % 360
 
     return Rotation(yaw, pitch)
 
