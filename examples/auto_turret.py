@@ -167,5 +167,5 @@ class AutoTurret(Client):
                 break
 
 
-turret = AutoTurret('Steve', range_distance=15, whitelist=None, target_all=True)
+turret = AutoTurret('Steve', range_distance=15, whitelist=None, target_all=False)
 turret.run('localhost')
