@@ -952,10 +952,10 @@ class ConnectionState:
     async def parse_0x21(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Effect packet (0x21) - World/sound effects"""
         effect_id = protocol.read_int(buffer)
-        location = protocol.read_position(buffer)
+        position = protocol.read_position(buffer)
         data = protocol.read_int(buffer)
-        disable_relative_volume = protocol.read_bool(buffer)
-        self._dispatch('effect', effect_id, location, data, disable_relative_volume)
+        disable_relative = protocol.read_bool(buffer)
+        self._dispatch('effect', effect_id, position, data, disable_relative)
 
     async def parse_0x22(self, data: protocol.ProtocolBuffer) -> None:
         """Handle Particle packet (0x22) - Particle effects"""
