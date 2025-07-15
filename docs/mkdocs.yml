@@ -129,7 +129,7 @@ nav:
               - scoreboard: 'reference/event/ui/scoreboard.md'
               - tablist: 'reference/event/ui/tablist.md'
   - Extensions:
-      - Ticks: 'ext/ticks.md'
+      - Tasks: 'ext/tasks.md'
 
 markdown_extensions:
   - abbr

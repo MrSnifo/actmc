@@ -30,10 +30,10 @@ import inspect
 import time
 
 if TYPE_CHECKING:
-    from typing import Callable, Any, Dict, List, Coroutine, TypeVar, Optional
+    from typing import Callable, Any, Dict, List, Coroutine, TypeVar, Optional, Union
     T = TypeVar('T', bound=Callable[..., Coroutine[Any, Any, None]])
 
-__all__ = ('Loop', 'ticks')
+__all__ = ('Loop', 'loop', 'ticks')
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -44,21 +44,51 @@ class Loop:
 
     def __init__(self,
                  coro: Callable[..., Coroutine[Any, Any, None]],
-                 tps: float = 60,
+                 tps: Optional[float] = None,
+                 seconds: Optional[float] = None,
+                 minutes: Optional[float] = None,
+                 hours: Optional[float] = None,
                  count: Optional[int] = None,
                  name: Optional[str] = None,
                  max_catchup: int = 5) -> None:
-        if tps <= 0:
-            raise ValueError("TPS must be positive")
+
+        # Validate timing parameters
+        timing_params = [tps, seconds, minutes, hours]
+        provided_params = [p for p in timing_params if p is not None]
+
+        if len(provided_params) != 1:
+            raise ValueError("Exactly one of tps, seconds, minutes, or hours must be provided")
+
+        # Calculate TPS based on provided parameter
+        if tps is not None:
+            if tps <= 0:
+                raise ValueError("TPS must be positive")
+            calculated_tps = tps
+        elif seconds is not None:
+            if seconds <= 0:
+                raise ValueError("seconds must be positive")
+            calculated_tps = 1.0 / seconds
+        elif minutes is not None:
+            if minutes <= 0:
+                raise ValueError("minutes must be positive")
+            calculated_tps = 1.0 / (minutes * 60)
+        elif hours is not None:
+            if hours <= 0:
+                raise ValueError("hours must be positive")
+            calculated_tps = 1.0 / (hours * 3600)
+        else:
+            # This should never happen due to the validation above, but just in case
+            raise ValueError("No valid timing parameter provided")
+
         if max_catchup <= 0:
             raise ValueError("max_catchup must be positive")
         if not inspect.iscoroutinefunction(coro):
             raise TypeError(f'Expected coroutine function, not {type(coro).__name__!r}.')
 
         self.coro = coro
-        self._target_tps = tps
-        self._current_tps = tps
-        self.tick_duration = 1.0 / tps
+        self._target_tps = calculated_tps
+        self._current_tps = calculated_tps
+        self.tick_duration = 1.0 / calculated_tps
         self.count = count
         self.name = name or f"Loop-{coro.__name__}"
         self.max_catchup = max_catchup
@@ -82,6 +112,32 @@ class Loop:
         # Tick control
         self._skip_next = False
         self._priority_queue: List[Callable[..., Coroutine[Any, Any, None]]] = []
+
+        # For handling self parameter in class methods
+        self._bound_instance = None
+
+    def __get__(self, instance, owner):
+        """Descriptor protocol to handle class method binding."""
+        if instance is None:
+            return self
+
+        # Create a bound copy of the loop for this instance
+        bound_loop = Loop(
+            coro=self.coro,
+            tps=self._target_tps,
+            count=self.count,
+            name=f"{owner.__name__}.{self.name}",
+            max_catchup=self.max_catchup
+        )
+        bound_loop._bound_instance = instance
+
+        # Copy callbacks if they exist
+        bound_loop._on_start = self._on_start
+        bound_loop._on_stop = self._on_stop
+        bound_loop._on_tick = self._on_tick
+        bound_loop._on_error = self._on_error
+
+        return bound_loop
 
     @property
     def tps(self) -> float:
@@ -174,6 +230,10 @@ class Loop:
         self._tick_count = 0
         self._start_time = time.perf_counter()
         self._total_pause_time = 0.0
+
+        # If this is a bound method, prepend the instance to args
+        if self._bound_instance is not None:
+            args = (self._bound_instance,) + args
 
         self._task = asyncio.create_task(self._run(*args, **kwargs), name=self.name)
 
@@ -294,7 +354,7 @@ class Loop:
                                 await self._on_tick(self._tick_count)
 
                             # Execute main coroutine
-                            await self.coro(self._tick_count, self.elapsed_time, *args, **kwargs)
+                            await self.coro(*args, **kwargs)
 
                             # Reset error counter on successful tick
                             consecutive_errors = 0
@@ -394,8 +454,7 @@ class Loop:
         self._on_stop = callback
         return callback
 
-    def on_tick(self, callback: Callable[[int], Coroutine[Any, Any, None]]) -> Callable[[int],
-                                                                               Coroutine[Any, Any, None]]:
+    def on_tick(self, callback: Callable[[int], Coroutine[Any, Any, None]]) -> Callable[[int], Coroutine[Any, Any, None]]:
         """
         Set callback called before each tick.
 
@@ -412,8 +471,7 @@ class Loop:
         self._on_tick = callback
         return callback
 
-    def on_error(self, callback: Callable[[Exception, int], Coroutine[Any, Any, None]]) -> Callable[[Exception, int],
-    Coroutine[Any, Any, None]]:
+    def on_error(self, callback: Callable[[Exception, int], Coroutine[Any, Any, None]]) -> Callable[[Exception, int], Coroutine[Any, Any, None]]:
         """
         Set callback for error handling.
 
@@ -460,18 +518,118 @@ class Loop:
         return info
 
 
-def ticks(*,
-          tps: float = 60,
-          count: Optional[int] = None,
-          name: Optional[str] = None,
-          max_catchup: int = 5) -> Callable[[T], Loop]:
+def loop(func: Optional[T] = None,
+         *,
+         seconds: Optional[float] = None,
+         minutes: Optional[float] = None,
+         hours: Optional[float] = None,
+         count: Optional[int] = None,
+         name: Optional[str] = None,
+         max_catchup: int = 5) -> Union[Loop, Callable[[T], Loop]]:
     """
-    Decorator factory to create a tick-based loop.
+    Decorator to create a time-based loop.
+
+    Can be used with or without parameters:
+
+    @loop(seconds=5.0)
+    async def my_function():
+        pass
+
+    @loop(minutes=1.0)
+    async def my_function():
+        pass
 
     Parameters
     ----------
+    func: Optional[T]
+        The function to decorate (when used without parentheses)
+    seconds: Optional[float]
+        Interval in seconds
+    minutes: Optional[float]
+        Interval in minutes
+    hours: Optional[float]
+        Interval in hours
+    count: Optional[int]
+        Maximum number of iterations
+    name: Optional[str]
+        Custom name for the loop
+    max_catchup: int
+        Maximum iterations to catch up in one frame
+
+    Returns
+    -------
+    Union[Loop, Callable[[T], Loop]]
+        A Loop instance or decorator function
+
+    Raises
+    ------
+    ValueError
+        If no timing parameter is provided or multiple are provided
+    """
+    timing_params = [seconds, minutes, hours]
+    provided_params = [p for p in timing_params if p is not None]
+
+    if len(provided_params) != 1:
+        raise ValueError("Exactly one of seconds, minutes, or hours must be provided")
+
+    def decorator(f: T) -> Loop:
+        """
+        The actual decorator that wraps the coroutine function.
+
+        Parameters
+        ----------
+        f: T
+            The coroutine function to wrap
+
+        Returns
+        -------
+        Loop
+            A configured Loop instance
+        """
+        loop_name = name or f"loop-{f.__name__}"
+        return Loop(
+            coro=f,
+            seconds=seconds,
+            minutes=minutes,
+            hours=hours,
+            count=count,
+            name=loop_name,
+            max_catchup=max_catchup
+        )
+
+    # If func is provided, it means decorator was used without parentheses
+    if func is not None:
+        return decorator(func)
+
+    # Otherwise, return the decorator function
+    return decorator
+
+
+def ticks(func: Optional[T] = None,
+          *,
+          tps: float = 20,
+          count: Optional[int] = None,
+          name: Optional[str] = None,
+          max_catchup: int = 5) -> Union[Loop, Callable[[T], Loop]]:
+    """
+    Decorator to create a tick-based loop.
+
+    Can be used with or without parameters:
+
+    @ticks
+    async def my_function():
+        pass
+
+    @ticks(tps=30)
+    async def my_function():
+        pass
+
+    Parameters
+    ----------
+    func: Optional[T]
+        The function to decorate (when used without parentheses)
     tps: float
-        Ticks per second
+        Ticks per second (default: 20)
     count: Optional[int]
         Maximum number of ticks
     name: Optional[str]
@@ -481,8 +639,8 @@ def ticks(*,
 
     Returns
     -------
-    Callable[[T], Loop]
-        A decorator that converts a coroutine function into a Loop instance
+    Union[Loop, Callable[[T], Loop]]
+        A Loop instance or decorator function
 
     Raises
     ------
@@ -494,13 +652,13 @@ def ticks(*,
     if max_catchup <= 0:
         raise ValueError("max_catchup must be positive")
 
-    def decorator(func: T) -> Loop:
+    def decorator(f: T) -> Loop:
         """
         The actual decorator that wraps the coroutine function.
 
         Parameters
         ----------
-        func: T
+        f: T
             The coroutine function to wrap
 
         Returns
@@ -508,13 +666,18 @@ def ticks(*,
         Loop
             A configured Loop instance
         """
-        loop_name = name or f"ticks-{func.__name__}"        
+        loop_name = name or f"ticks-{f.__name__}"
         return Loop(
-            coro=func,
+            coro=f,
             tps=tps,
             count=count,
             name=loop_name,
             max_catchup=max_catchup
         )
 
+    # If func is provided, it means decorator was used without parentheses
+    if func is not None:
+        return decorator(func)
+
+    # Otherwise, return the decorator function
     return decorator

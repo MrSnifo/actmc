@@ -40,7 +40,7 @@ packages = [
     "actmc",
     "actmc.ui",
     "actmc.entities",
-    "actmc.ext.ticks",
+    "actmc.ext.tasks",
     "actmc.types"
 ]
 include-package-data = true
