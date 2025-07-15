@@ -112,7 +112,6 @@ class Trader(Client):
                 if slot.item.id != self._item_id and slot.item.id == self._trade_item_id and not self._refill:
                     await self._drop_items(slot.item.id, slot.item.count)
 
-
         # Process queued trades
         if self._pending_trades > 0:
             count = self._pending_trades
