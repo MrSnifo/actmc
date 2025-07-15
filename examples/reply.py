@@ -4,7 +4,7 @@ from actmc import Client
 client = Client('Steve')
 
 @client.event
-async def on_ready():
+async def on_ready() -> None:
     """
     Called when the bot has connected and is ready to receive events.
     """

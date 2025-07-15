@@ -5,7 +5,7 @@ from actmc import Client
 client = Client('Steve')
 
 @client.event
-async def on_ready():
+async def on_ready() -> None:
     """Bot ready."""
     print("Bot is connected and ready!")
 

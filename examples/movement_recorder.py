@@ -24,7 +24,6 @@ class Bot(Client):
 
     def __init__(self, username: str, owner_name: str) -> None:
         super().__init__(username)
-
         self.owner_name = owner_name
         #  Internal tracking of the owner's entity ID
         self._entity_id = None
@@ -38,7 +37,7 @@ class Bot(Client):
 
     async def on_ready(self) -> None:
         """Called when bot connects successfully."""
-        print(f"Bot ready! Commands: !target, !record, !stop, !play, !clear")
+        print(f"{self.user.username} is ready! Commands: !target, !record, !stop, !play, !clear")
 
     async def on_system_message(self, message: Message) -> None:
         """Handle system messages."""
@@ -86,7 +85,7 @@ class Bot(Client):
         else:
             print(f"Owner found in tablist but not spawned in world (UUID: {owner_uuid})")
 
-    async def _start_recording(self, duration: float = None):
+    async def _start_recording(self, duration: float = None) -> None:
         """
         Begin recording player movements.
 

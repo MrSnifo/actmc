@@ -27,7 +27,7 @@ class Trader(Client):
         Maximum distance to detect players.
     """
 
-    def __init__(self, username: str, item_id: int, trade_item_id: int, refill: bool):
+    def __init__(self, username: str, item_id: int, trade_item_id: int, refill: bool) -> None:
         super().__init__(username)
         self.look_distance = 4.0
         self._refill = refill
@@ -36,12 +36,11 @@ class Trader(Client):
         self._trading_lock = asyncio.Lock()
         self._pending_trades = 0
 
-
-    async def on_join(self):
+    async def on_join(self) -> None:
         """Called when the bot joins the server."""
         print(f"Ready to trade as {self.user.username}")
 
-    async def _look_at_closest_player(self):
+    async def _look_at_closest_player(self) -> None:
         """Find the closest player within range and look at them."""
         players = [e for e in self.entities.values() if isinstance(e, Player) and e.uuid != self.user.uuid]
         if not players:
@@ -80,14 +79,14 @@ class Trader(Client):
                         dropped += 1
             return count - dropped
 
-    async def perform_trade(self, count: int):
+    async def _perform_trade(self, count: int) -> None:
         """Perform a trade with concurrency control."""
         left = await self._drop_items(self._trade_item_id, count)
         if left > 0:
             print("[Trade] Not enough trade items. Dropping fallback items.")
             await self._drop_items(self._item_id, left)
 
-    async def on_entity_head_look(self, *_):
+    async def on_entity_head_look(self, *_) -> None:
         """Called when any entity updates head rotation."""
         await self._look_at_closest_player()
 
@@ -117,7 +116,7 @@ class Trader(Client):
             count = self._pending_trades
             self._pending_trades = 0
             print(f"[Trade] Performing {count} trade(s)")
-            await self.perform_trade(count)
+            await self._perform_trade(count)
 
 # Bot trades Apple → Golden Apple, no refill
 bot = Trader('Steve', 260, 322, False)

@@ -3,12 +3,12 @@ from actmc import Client
 client = Client('Steve')
 
 @client.event
-async def on_join():
+async def on_join() -> None:
     """Called when the bot joins the server."""
     print("Bot joined the server!")
 
 @client.event
-async def on_ready():
+async def on_ready() -> None:
     """Called when the bot is fully connected and ready."""
     print("Bot is connected and ready!")
 
