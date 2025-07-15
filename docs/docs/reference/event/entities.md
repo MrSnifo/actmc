@@ -202,13 +202,56 @@
 - **Description**: Entity status changed
 - **Parameters**:
   - `entity`: [`Entity`][actmc.entities.entity.Entity] - The entity
-  - `status`: [`int`][int] - Status code
+  - `status`: [`int`][int] - [Status code](#entity-status-codes)
 - **Usage**:
   ```python
   @client.event
   async def on_entity_status(entity: Entity, status: int) -> None:
       ...
   ```
+  
+##### Entity Status Codes
+
+| Status Code | Entity Type(s)              | Description                                               |
+|:-----------:|:---------------------------:|:---------------------------------------------------------:|
+|      0      | TippedArrow                 | Spawns tipped arrow particle effects                     |
+|      1      | Rabbit, MinecartSpawner     | Rabbit jump animation / Spawner resets delay             |
+|      2      | Living                      | Hurt animation and sound                                 |
+|      3      | Snowball, Egg, Living       | Death animation / Snowball & Egg particles               |
+|      4      | IronGolem, EvocationFangs   | Golem attack / Evoker fang attack animation & sound      |
+|      5      | None                        | —                                                         |
+|      6      | AbstractHorse, TameableAnimal | Taming failed (smoke particles)                        |
+|      7      | AbstractHorse, TameableAnimal | Taming succeeded (heart particles)                     |
+|      8      | Wolf                        | Wolf shakes water                                         |
+|      9      | Player                      | Finishes item use (eat/drink)                            |
+|     10      | Sheep, MinecartTNT          | Sheep eats grass / TNT minecart ignites                 |
+|     11      | IronGolem                   | Golem holds poppy                                        |
+|     12      | Villager                    | Villager mating hearts                                   |
+|     13      | Villager                    | Villager angry particles                                 |
+|     14      | Villager                    | Villager happy particles                                 |
+|     15      | Witch                       | Witch magic particles (10–45)                            |
+|     16      | Zombie Villager             | Curing finished sound                                    |
+|     17      | Fireworks                   | Firework explosion effect                                |
+|     18      | Animal                      | Love mode heart particles                                |
+|     19      | Squid                       | Reset squid rotation                                     |
+|     20      | Insentient                  | Explosion particles (e.g., silverfish block enter/exit)  |
+|     22      | Player                      | Enables reduced debug info                               |
+|     23      | Player                      | Disables reduced debug info                              |
+|     24      | Player                      | Set OP permission level 0                                |
+|     25      | Player                      | Set OP permission level 1                                |
+|     26      | Player                      | Set OP permission level 2                                |
+|     27      | Player                      | Set OP permission level 3                                |
+|     28      | Player                      | Set OP permission level 4                                |
+|     29      | Living                      | Shield block sound                                       |
+|     30      | Living                      | Shield break sound                                       |
+|     31      | FishingHook                 | Hook catches fish or entity                              |
+|     32      | ArmorStand                  | Hit sound + cooldown                                     |
+|     33      | Living                      | Thorns sound + hurt animation                            |
+|     34      | IronGolem                   | Puts away poppy                                          |
+|     35      | Entity                      | Totem of Undying animation                               |
+|     36      | Living                      | Hurt + drown hurt sound                                  |
+|     37      | Living                      | Hurt + burn hurt sound                                   |
+
 
 ### Entity Keep Alive
 - **Description**: Entity keep-alive
