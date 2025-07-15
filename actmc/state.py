@@ -983,9 +983,9 @@ class ConnectionState:
         """Handle Sound Effect packet (0x49)"""
         sound_id = protocol.read_varint(buffer)
         category = protocol.read_varint(buffer)
-        x = protocol.read_int(buffer)
-        y = protocol.read_int(buffer)
-        z = protocol.read_int(buffer)
+        x = protocol.read_int(buffer) / 8.0
+        y = protocol.read_int(buffer) / 8.0
+        z = protocol.read_int(buffer) / 8.0
         volume = protocol.read_float(buffer)
         pitch = protocol.read_float(buffer)
         position = math.Vector3D(x, y, z)
