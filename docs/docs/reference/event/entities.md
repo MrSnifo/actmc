@@ -199,6 +199,13 @@
   ```
 
 ### Entity Status
+
+???+ Warning
+
+    Some custom servers (like Spigot, Paper, etc.) may not send standard status codes for events such as fishing
+    catches. Instead, they might handle these actions by spawning entities or triggering effects. For accurate
+    detection, monitor entity spawns and effects rather than relying on status updates.
+
 - **Description**: Entity status changed
 - **Parameters**:
   - `entity`: [`Entity`][actmc.entities.entity.Entity] - The entity
