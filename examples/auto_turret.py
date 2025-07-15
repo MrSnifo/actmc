@@ -14,9 +14,9 @@ class AutoTurret(Client):
     ----------
     username: str
         Bot username
-    range_distance: float
+    range_distance: float, default=12
         Maximum targeting range in blocks
-    whitelist: Optional[List[str]]
+    whitelist: Optional[List[str]], default=None
         Player names to never target. None = no players, [] = all players
     target_all: bool
         Target all living entities vs monsters only
