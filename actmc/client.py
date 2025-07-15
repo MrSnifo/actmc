@@ -777,8 +777,8 @@ class Client:
             The crafting window object that contains the crafting interface.
             Must be a valid crafting table or player inventory crafting area.
         recipe_id: int
-            The recipe ID to craft. Must correspond to a valid recipe in the
-            server's recipe registry.
+            The [internal ID](https://pokechu22.github.io/Burger/1.12.2.html#recipes) to craft.
+            Must correspond to a valid recipe in the server's recipe registry.
         make_all: bool
             Whether to craft as many items as possible (shift-click behavior).
             When True, crafts the maximum number of items possible with available materials.
