@@ -1,5 +1,4 @@
-from actmc.entities.player import Player
-from actmc.entities.entity import Entity
+from actmc.entities import Entity, Player
 from actmc.ui import Message
 from actmc import Client
 import asyncio

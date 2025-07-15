@@ -1,5 +1,4 @@
-from actmc.entities.entity import Entity
-from actmc.entities.player import Player
+from actmc.entities import Entity, Player
 from typing import Optional
 from actmc import Client
 

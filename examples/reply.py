@@ -1,4 +1,4 @@
-from actmc.ui.chat import Message
+from actmc.ui import Message
 from actmc import Client
 
 client = Client('Steve')

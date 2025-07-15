@@ -7,15 +7,35 @@ from actmc import Client
 import asyncio
 
 class Trader(Client):
-    """A trading bot that automatically trades items with players."""
+    """
+    A trading bot that automatically trades items with players.
 
-    def __init__(self, username: str):
+    Parameters
+    ----------
+    username: str
+        The username for the bot.
+    item_id: int
+        Item ID that the bot gives in trade.
+    trade_item_id: int
+        Item ID that the bot receives in trade.
+    refill: bool
+        Whether the bot accepts trade items for refill.
+
+    Attributes
+    ----------
+    look_distance: float
+        Maximum distance to detect players.
+    """
+
+    def __init__(self, username: str, item_id: int, trade_item_id: int, refill: bool):
         super().__init__(username)
         self.look_distance = 4.0
-        # Apple => Golden Apple
-        self.item_id, self.trade_item_id = 260, 322
+        self._refill = refill
+        self._item_id = item_id
+        self._trade_item_id = trade_item_id
         self._trading_lock = asyncio.Lock()
         self._pending_trades = 0
+
 
     async def on_join(self):
         """Called when the bot joins the server."""
@@ -62,10 +82,10 @@ class Trader(Client):
 
     async def perform_trade(self, count: int):
         """Perform a trade with concurrency control."""
-        left = await self._drop_items(self.trade_item_id, count)
+        left = await self._drop_items(self._trade_item_id, count)
         if left > 0:
             print("[Trade] Not enough trade items. Dropping fallback items.")
-            await self._drop_items(self.item_id, left)
+            await self._drop_items(self._item_id, left)
 
     async def on_entity_head_look(self, *_):
         """Called when any entity updates head rotation."""
@@ -73,9 +93,13 @@ class Trader(Client):
 
     async def on_collect_item(self, collected: Entity, count: int, collector: Entity) -> None:
         """Called when an item is collected by an entity."""
-        if isinstance(collected, DroppedItem) and collector.id == self.user.id and collected.item.id == self.item_id:
-            self._pending_trades += count
-            print(f"[Collect] Queued {count} trade(s). Total pending: {self._pending_trades}")
+        if isinstance(collected, DroppedItem) and collector.id == self.user.id:
+            if collected.item.id == self._item_id:
+                self._pending_trades += count
+                print(f"[Collect] Queued {count} trade(s). Total pending: {self._pending_trades}")
+                await self.user.sneak(True)
+                await asyncio.sleep(0.1)
+                await self.user.sneak(False)
 
     async def on_window_items_updated(self, window: Window) -> None:
         """Called when inventory window items are updated."""
@@ -84,8 +108,10 @@ class Trader(Client):
 
         # Drop unrelated items
         for slot in window.slots:
-            if slot.item and slot.item.id not in {self.trade_item_id, self.item_id}:
-                await self._drop_items(slot.item.id, slot.item.count)
+            if slot.item:
+                if slot.item.id != self._item_id and slot.item.id == self._trade_item_id and not self._refill:
+                    await self._drop_items(slot.item.id, slot.item.count)
+
 
         # Process queued trades
         if self._pending_trades > 0:
@@ -94,5 +120,6 @@ class Trader(Client):
             print(f"[Trade] Performing {count} trade(s)")
             await self.perform_trade(count)
 
-bot = Trader('Steve')
+# Bot trades Apple → Golden Apple, no refill
+bot = Trader('Steve', 260, 322, False)
 bot.run('localhost')
