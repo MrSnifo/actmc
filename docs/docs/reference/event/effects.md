@@ -156,7 +156,7 @@
 ### Sound Effect
 - **Description**: Sound effect played
 - **Parameters**:
-  - `id`: [`int`][int] - Sound ID
+  - `sound_id`: [`int`][int] - Sound ID
   - `category`: [`int`][int] - Sound category
   - `position`: [`Vector3D`][actmc.math.Vector3D] - Sound location
   - `volume`: [`float`][float] - Playback volume (0.0-1.0)
@@ -164,7 +164,7 @@
 - **Usage**:
   ```python
   @client.event
-  async def on_sound_effect(id: int, category: int, position: Vector3D, volume: float, pitch: float) -> None:
+  async def on_sound_effect(sound_id: int, category: int, position: Vector3D, volume: float, pitch: float) -> None:
       ...
   ```
 
