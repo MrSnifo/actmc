@@ -29,14 +29,14 @@ task = my_bot.start()
 
 ### Auto Chat
 ```python
-@ticks(tps=0.5)  # Every 2 seconds
+@tasks.ticks(tps=0.5)  # Every 2 seconds
 async def auto_chat():
     await client.send_message("Hello world!")
 ```
 
 ### Health Check
 ```python
-@loop(seconds=10.0)
+@tasks.loop(seconds=10.0)
 async def health_check():
     if await bot.get_health() < 5:
         await bot.eat_food()
