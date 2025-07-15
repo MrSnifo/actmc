@@ -280,4 +280,5 @@ class Player(Living):
         return self.right_shoulder_entity is not None
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} id={self.id}, health={self.health}, score={self.score}>"
+        return (f"<{self.__class__.__name__} id={self.id}, health={self.health if hasattr(self, 'health') else None},"
+                f" score={self.score}>")
