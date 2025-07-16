@@ -100,8 +100,8 @@ class AutoTurret(Client):
             self.target = closest
             self.target_velocities = []
             self.last_target_pos = None
-            target_name = getattr(closest, 'username', f'Entity-{closest.id}')
-            print(f"[Target] {target_name}")
+            target_name = getattr(closest, 'id', 'unknown')
+            print(f"[Target] Entity-{target_name}")
 
         # Track velocity
         if self.last_target_pos:
