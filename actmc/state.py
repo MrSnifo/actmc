@@ -87,9 +87,6 @@ class ConnectionState:
         if not self._packet_parsers:
             self._build_parser_cache()
 
-
-    # Core Connection Methods
-
     def clear(self) -> None:
         """
         Reset all connection state to initial values.
@@ -146,8 +143,6 @@ class ConnectionState:
         except Exception as error:
             _logger.exception(f"Failed to parse packet 0x{packet_id:02X}: {error}")
             self._dispatch('error', packet_id, error)
-
-    # Player State Methods
 
     def _check_ready_state(self) -> None:
         """
@@ -219,6 +214,13 @@ class ConnectionState:
             current_task = asyncio.current_task()
             self._chunk_tasks.discard(current_task)
 
+    def get_entity(self, entity_id: int) -> Optional[entities.Entity]:
+        """Quickly retrieve an entity by its ID."""
+        try:
+            return self.entities[entity_id]
+        except KeyError:
+            _logger.warning(f"Entity with ID %s not found.", entity_id)
+            return None
 
     # Entity Creation Methods
     @staticmethod
@@ -549,101 +551,96 @@ class ConnectionState:
 
     async def parse_0x26(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Relative Move packet (0x26)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         delta_x = protocol.read_short(buffer)
         delta_y = protocol.read_short(buffer)
         delta_z = protocol.read_short(buffer)
         on_ground = protocol.read_bool(buffer)
-        delta = math.Vector3D(delta_x / 4096.0, delta_y / 4096.0, delta_z / 4096.0)
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            current_pos = entity.position
 
-            # Apply relative movement
-            new_x = current_pos.x + delta.x
-            new_y = current_pos.y + delta.y
-            new_z = current_pos.z + delta.z
+        # Convert to delta vector
+        delta = math.Vector3D(delta_x / 4096.0,  delta_y / 4096.0, delta_z / 4096.0)
 
-            entity.position = math.Vector3D(new_x, new_y, new_z)
-            self._dispatch('entity_move', entity, delta, on_ground)
+        # Apply relative movement
+        entity.position += delta
+
+        # Dispatch event
+        self._dispatch('entity_move', entity, delta, on_ground)
 
     async def parse_0x27(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Look and Relative Move packet (0x27)"""
-        entity_id = protocol.read_varint(buffer)
-        delta_x_raw = protocol.read_short(buffer)  # Change in position * 4096
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
+        delta_x_raw = protocol.read_short(buffer)
         delta_y_raw = protocol.read_short(buffer)
         delta_z_raw = protocol.read_short(buffer)
-        yaw = protocol.read_angle(buffer)  # Absolute yaw
-        pitch = protocol.read_angle(buffer)  # Absolute pitch
-        on_ground = protocol.read_bool(buffer)
-
-        # Convert raw delta values to actual coordinate changes
-        delta_x = delta_x_raw / 4096.0
-        delta_y = delta_y_raw / 4096.0
-        delta_z = delta_z_raw / 4096.0
-
-        delta = math.Vector3D(delta_x, delta_y, delta_z)
-
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            current_pos = entity.position
-
-            # Apply relative movement
-            new_x = current_pos.x + delta.x
-            new_y = current_pos.y + delta.y
-            new_z = current_pos.z + delta.z
-            entity.position = math.Vector3D(new_x, new_y, new_z)
-            entity.rotation = math.Rotation(yaw, pitch)
-            self._dispatch('entity_move_look', entity, delta, on_ground)
-
-    async def parse_0x28(self, buffer: protocol.ProtocolBuffer) -> None:
-        """Handle Entity Look packet (0x28)"""
-        entity_id = protocol.read_varint(buffer)
         yaw = protocol.read_angle(buffer)
         pitch = protocol.read_angle(buffer)
         on_ground = protocol.read_bool(buffer)
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            entity.rotation = math.Rotation(yaw, pitch)
-            self._dispatch('entity_look', entity, on_ground)
+
+        # Convert raw delta values to coordinate changes
+        delta = math.Vector3D(delta_x_raw / 4096.0, delta_y_raw / 4096.0, delta_z_raw / 4096.0)
+
+        # Apply relative movement
+        entity.position += delta
+        entity.rotation = math.Rotation(yaw, pitch)
+
+        self._dispatch('entity_move_look', entity, delta, on_ground)
+
+    async def parse_0x28(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Handle Entity Look packet (0x28)"""
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
+        yaw = protocol.read_angle(buffer)
+        pitch = protocol.read_angle(buffer)
+        on_ground = protocol.read_bool(buffer)
+        entity.rotation = math.Rotation(yaw, pitch)
+        self._dispatch('entity_look', entity, on_ground)
 
     async def parse_0x36(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Head Look packet (0x36)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         head_yaw = protocol.read_angle(buffer)
-        # Update entity if it exists
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            entity.rotation.yaw = head_yaw
-            self._dispatch('entity_head_look', entity)
+        entity.rotation.yaw = head_yaw
+        self._dispatch('entity_head_look', entity)
 
     async def parse_0x3e(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Velocity packet (0x3E)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         v_x = protocol.read_short(buffer) / 8000.0 * 20
         v_y = protocol.read_short(buffer) / 8000.0 * 20
         v_z = protocol.read_short(buffer) / 8000.0 * 20
-        if entity_id in self.entities:
-            self._dispatch('entity_velocity', self.entities[entity_id],  math.Vector3D(v_x, v_y, v_z))
+        self._dispatch('entity_velocity', entity,  math.Vector3D(v_x, v_y, v_z))
 
     async def parse_0x43(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Set Passengers packet (0x43)"""
-        vehicle_entity_id = protocol.read_varint(buffer)
+        vehicle_entity = self.get_entity(protocol.read_varint(buffer))
         passenger_count = protocol.read_varint(buffer)
-        passenger_ids = [protocol.read_varint(buffer) for _ in range(passenger_count)]
-        vehicle_entity = self.entities.get(vehicle_entity_id)
-        passengers = [self.entities.get(pid) for pid in passenger_ids if pid in self.entities]
-        if vehicle_entity is not None:
-            self._dispatch('set_passengers', vehicle_entity, passengers)
+        passenger = [self.get_entity(protocol.read_varint(buffer)) for _ in range(passenger_count)]
+        if vehicle_entity and passenger:
+            self._dispatch('set_passengers', vehicle_entity, passenger)
 
     async def parse_0x3c(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Metadata packet (0x3C)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         metadata = protocol.read_entity_metadata(buffer)
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            entity.update_metadata(metadata)
-            self._dispatch('entity_metadata', entity, metadata)
+        entity.update_metadata(metadata)
+        self._dispatch('entity_metadata', entity, metadata)
 
     async def parse_0x3d(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Attach packet (0x3D) - Leash/attachment"""
@@ -654,50 +651,53 @@ class ConnectionState:
 
     async def parse_0x3f(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Equipment packet (0x3F)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         slot_index = protocol.read_varint(buffer)
         item_data = protocol.read_slot(buffer)
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
+        # Only Living entity with slots for equipments.
+        if not isinstance(entity, entities.entity.Living):
+            _logger.debug(f"Entity {entity.id} is not a Living entity, Skipping equipment")
+            return
 
-            # Only Living entity with slots for equipments.
-            if not isinstance(entity, entities.entity.Living):
-                _logger.debug(f"Entity {entity_id} is not a Living entity, skipping equipment")
-                return
+        slot = gui.Slot(slot_index)
+        if item_data:
+            slot.item = entities.misc.Item(
+                item_data['item_id'],
+                item_data['item_count'],
+                item_data['item_damage'],
+                item_data['nbt'])
+        else:
+            slot.item = None
 
-            slot = gui.Slot(slot_index)
-            if item_data:
-                slot.item = entities.misc.Item(
-                    item_data['item_id'],
-                    item_data['item_count'],
-                    item_data['item_damage'],
-                    item_data['nbt'])
-            else:
-                slot.item = None
-
-            entity.set_equipment(slot)
-            self._dispatch('entity_equipment', entity, slot)
+        entity.set_equipment(slot)
+        self._dispatch('entity_equipment', entity, slot)
 
     async def parse_0x1b(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Status packet (0x1B)"""
-        entity_id = protocol.read_int(buffer)
+        entity = self.get_entity(protocol.read_int(buffer))
+        if entity is None:
+            return
+
         status = protocol.read_byte(buffer)
-        if entity_id in self.entities:
-            self._dispatch('entity_status', self.entities[entity_id], status)
-        else:
-            _logger.warning(f"Unknown entity ID: '%s', with status: %s", entity_id, status)
+        self._dispatch('entity_status', entity, status)
 
     async def parse_0x25(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Keep Alive packet (0x25)"""
-        entity_id = protocol.read_varint(buffer)
-        if entity_id in self.entities:
-            self._dispatch('entity_keep_alive', self.entities[entity_id])
-        else:
-            _logger.warning(f"Entity keep-alive received for untracked entity ID: %s", entity_id)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
+        self._dispatch('entity_keep_alive', entity)
 
     async def parse_0x4e(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Properties packet (0x4E)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         num_properties = protocol.read_int(buffer)
 
         properties = {}
@@ -714,51 +714,49 @@ class ConnectionState:
                 modifiers[modifier_uuid] = {'amount': amount, 'operation': operation}
             properties[key] = {'value': value, 'modifiers': modifiers}
 
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            entity.update_properties(properties)
-            self._dispatch('entity_properties', entity, properties)
-        else:
-            _logger.warning(f"Unknown entity ID: '%s', with properties: %s", entity_id, properties)
+        entity.update_properties(properties)
+        self._dispatch('entity_properties', entity, properties)
 
     async def parse_0x4c(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Teleport packet (0x4C)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         x = protocol.read_double(buffer)
         y = protocol.read_double(buffer)
         z = protocol.read_double(buffer)
         yaw = protocol.read_angle(buffer)
         pitch = protocol.read_angle(buffer)
         on_ground = protocol.read_bool(buffer)
-        if entity_id in self.entities:
-            self.entities[entity_id].position = math.Vector3D(x, y, z)
-            self.entities[entity_id].rotation = math.Rotation(yaw, pitch)
-            self._dispatch('entity_teleport', self.entities[entity_id], on_ground)
+
+        entity.position = math.Vector3D(x, y, z)
+        entity.rotation = math.Rotation(yaw, pitch)
+        self._dispatch('entity_teleport', entity, on_ground)
 
     # Entity Effects
     async def parse_0x4f(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Effect packet (0x4F) - Potion effects"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         effect_id = protocol.read_byte(buffer)
         amplifier = protocol.read_byte(buffer)
         duration = protocol.read_varint(buffer)
         flags = protocol.read_byte(buffer)
         is_ambient = bool(flags & 0x01)
         show_particles = bool(flags & 0x02)
-        if entity_id in self.entities:
-            self._dispatch('entity_effect', self.entities[entity_id], effect_id, amplifier, duration, is_ambient,
-                           show_particles)
-        else:
-            _logger.warning(f"Untracked entity ID: %s, effect added ID: %s", entity_id, effect_id)
+        self._dispatch('entity_effect', entity, effect_id, amplifier, duration, is_ambient, show_particles)
 
     async def parse_0x33(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Remove Entity Effect packet (0x33)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         effect_id = protocol.read_byte(buffer)
-        if entity_id in self.entities:
-            self._dispatch('remove_entity_effect', self.entities[entity_id], effect_id)
-        else:
-            _logger.warning(f"Untracked entity ID: %s, effect removed", entity_id)
+        self._dispatch('remove_entity_effect', entity, effect_id)
 
     # Player Related
     async def parse_0x41(self, data: protocol.ProtocolBuffer) -> None:
@@ -819,12 +817,12 @@ class ConnectionState:
 
     async def parse_0x30(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Use Bed packet (0x30)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         location = protocol.read_position(buffer)
-        if entity_id in self.entities:
-            self._dispatch('use_bed', self.entities[entity_id], math.Vector3D(*location))
-        else:
-            _logger.warning(f"Untracked entity ID: %s, used bed", entity_id)
+        self._dispatch('use_bed', entity, math.Vector3D(*location))
 
     async def parse_0x2c(self, data: protocol.ProtocolBuffer) -> None:
         """Handle Player Abilities packet (0x2C)"""
@@ -1285,32 +1283,27 @@ class ConnectionState:
         event = protocol.read_varint(buffer)
         if event == 0:
             self._dispatch('enter_combat')
-        elif event == 1:
+            return
+
+        if event == 1:
             duration = protocol.read_varint(buffer)
+            entity = self.get_entity(protocol.read_int(buffer))
+            if entity:
+                self._dispatch('end_combat', entity, duration)
+            return
+
+        if event == 2:
+            player = self.get_entity(protocol.read_varint(buffer))
             entity_id = protocol.read_int(buffer)
-            entity = self.entities.get(entity_id)
-            if not entity:
-                _logger.warning(f"Combat ended for untracked entity ID: %s", entity_id)
-                return
-            self._dispatch('end_combat', entity, duration)
-        elif event == 2:
-            player_id = protocol.read_varint(buffer)
-            entity_id = protocol.read_int(buffer)
-            message = protocol.read_chat(buffer)
-            player = self.entities.get(player_id)
-            entity = self.entities.get(entity_id)
-            if not player:
-                _logger.warning(f"Entity death for untracked player ID: %s", player_id)
+            message = Message(protocol.read_chat(buffer))
+            if player and entity_id == -1:
+                self._dispatch('player_death', player, message)
                 return
 
-            if entity_id == -1:
-                self._dispatch('player_death', player, Message(message))
-
-            if not entity:
-                if entity_id != -1:
-                    _logger.warning(f"Entity death for untracked entity ID: %s", entity_id)
-                return
-            self._dispatch('player_killed', player, entity, Message(message))
+            entity = self.get_entity(entity_id)
+            if entity:
+                self._dispatch('player_killed', player, entity, message)
+            return
 
     # Game State
     async def parse_0x1e(self, data: protocol.ProtocolBuffer) -> None:
@@ -1335,20 +1328,22 @@ class ConnectionState:
 
     async def parse_0x06(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Animation packet (0x06) - Entity animations"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         animation_id = protocol.read_ubyte(buffer)
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            self._dispatch('entity_animation', entity, animation_id)
+        self._dispatch('entity_animation', entity, animation_id)
 
     async def parse_0x08(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Block Break Animation packet (0x08)"""
-        entity_id = protocol.read_varint(buffer)
+        entity = self.get_entity(protocol.read_varint(buffer))
+        if entity is None:
+            return
+
         location = protocol.read_position(buffer)
         destroy_stage = protocol.read_byte(buffer)
-        if entity_id in self.entities:
-            entity = self.entities[entity_id]
-            self._dispatch('block_break_animation', entity, location, destroy_stage)
+        self._dispatch('block_break_animation', entity, location, destroy_stage)
 
     async def parse_0x18(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Plugin Message packet (0x18) - Custom plugin messages"""
@@ -1430,11 +1425,9 @@ class ConnectionState:
 
     async def parse_0x39(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Camera packet (0x39) - Entity camera focus"""
-        camera_entity_id = protocol.read_varint(buffer)
-        if camera_entity_id in self.entities:
-            self._dispatch('camera', self.entities[camera_entity_id])
-        else:
-            _logger.warning(f"Unknown entity ID: '%s', to handle camera", camera_entity_id)
+        camera = self.get_entity(protocol.read_varint(buffer))
+        if camera:
+            self._dispatch('camera', camera)
 
     async def parse_0x0e(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Tab-Complete packet (0x0E)"""
@@ -1444,17 +1437,11 @@ class ConnectionState:
 
     async def parse_0x4b(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Collect Item packet (0x4B)"""
-        collected_entity_id = protocol.read_varint(buffer)
-        collector_entity_id = protocol.read_varint(buffer)
+        collected = self.get_entity(protocol.read_varint(buffer))
+        collector = self.get_entity(protocol.read_varint(buffer))
         pickup_count = protocol.read_varint(buffer)
-        if collected_entity_id not in self.entities:
-            _logger.warning("CollectItem: Unknown collected entity ID: %s", collected_entity_id)
-            return
-        if collector_entity_id not in self.entities:
-            _logger.warning("CollectItem: Unknown collector entity ID: %s", collector_entity_id)
-            return
-        self._dispatch('collect_item', self.entities[collected_entity_id], pickup_count,
-                       self.entities[collector_entity_id])
+        if collected and collector:
+            self._dispatch('collect_item', collected, pickup_count, collector)
 
     async def parse_0x37(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Select Advancement Tab packet (0x37)"""
