@@ -130,7 +130,7 @@ class AutoTurret(Client):
         return self.last_rotation
 
     @tasks.ticks(tps=10)
-    async def aim_and_track(self):
+    async def aim_and_track(self) -> None:
         """Continuously track and aim at the closest valid target."""
         enemies = [e for e in self.entities.values() if self._is_valid_target(e)]
         if not enemies:
@@ -168,7 +168,7 @@ class AutoTurret(Client):
         await self.user.translate(rotation=self._smooth_rotation(rot))
 
     @tasks.ticks(tps=4)
-    async def shooting_loop(self):
+    async def shooting_loop(self) -> None:
         """Handles when and how to shoot based on cooldown and target status."""
         if (not self.target or self.is_shooting or
             len(self.target_velocities) < 2 or
@@ -193,18 +193,18 @@ class AutoTurret(Client):
         finally:
             self.is_shooting = False
 
-    async def on_join(self):
+    async def on_join(self) -> None:
         """Called when the bot successfully joins the world."""
         print(f"[Turret] Active - Range: {self.range_distance}m")
         self.aim_and_track.start()
         self.shooting_loop.start()
 
-    async def on_disconnect(self):
+    async def on_disconnect(self) -> None:
         """Cleanup when disconnected."""
         self.aim_and_track.stop()
         self.shooting_loop.stop()
 
-    async def on_window_items_updated(self, window: Window):
+    async def on_window_items_updated(self, window: Window) -> None:
         """Ensures a bow is equipped if available in the inventory."""
         if window.id != self.user.inventory.id or (window.slots[36].item and window.slots[36].item.id == 261):
             return
