@@ -208,7 +208,5 @@ class AutoTurret(Client):
                 print("[Equipment] Bow equipped")
                 break
 
-
-# Example usage:
 turret = AutoTurret('Steve', range_distance=14, whitelist=None, target_all=False)
 turret.run('localhost')
