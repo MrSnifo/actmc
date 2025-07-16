@@ -162,6 +162,10 @@
 
 ## Entity Properties
 
+???+ info
+
+    Most entities don't send velocity updates. You often need to estimate velocity from position changes over time.
+
 ### Entity Velocity
 - **Description**: Entity velocity changed
 - **Parameters**:
