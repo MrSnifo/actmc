@@ -626,6 +626,16 @@ class ConnectionState:
         if entity_id in self.entities:
             self._dispatch('entity_velocity', self.entities[entity_id],  math.Vector3D(v_x, v_y, v_z))
 
+    async def parse_0x43(self, buffer: protocol.ProtocolBuffer) -> None:
+        """Handle Set Passengers packet (0x43)"""
+        vehicle_entity_id = protocol.read_varint(buffer)
+        passenger_count = protocol.read_varint(buffer)
+        passenger_ids = [protocol.read_varint(buffer) for _ in range(passenger_count)]
+        vehicle_entity = self.entities.get(vehicle_entity_id)
+        passengers = [self.entities.get(pid) for pid in passenger_ids if pid in self.entities]
+        if vehicle_entity is not None:
+            self._dispatch('set_passengers', vehicle_entity, passengers)
+
     async def parse_0x3c(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Entity Metadata packet (0x3C)"""
         entity_id = protocol.read_varint(buffer)

@@ -79,6 +79,18 @@
   async def on_destroy_entities(entities: List[Entity]) -> None:
       ...
   ```
+  
+### Set Passengers
+- **Description**: Vehicle entity updated with its passengers.
+- **Parameters**:
+  - `vehicle`: [`Entity`][actmc.entities.entity.Entity] - The vehicle entity
+  - `passengers`: [`List`][typing.List][[`Entity`][actmc.entities.entity.Entity]] - List of passenger entities riding the vehicle
+- **Usage**:
+  ```python
+  @client.event
+  async def on_set_passengers(vehicle: Entity, passengers: List[Entity]) -> None:
+  ...
+  ```
 
 ## Entity Movement
 
