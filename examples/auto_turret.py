@@ -166,5 +166,5 @@ class AutoTurret(Client):
                 print("[Equipment] Bow equipped")
                 break
 
-turret = AutoTurret('Steve', range_distance=12, whitelist=None, target_all=False)
+turret = AutoTurret('Steve', range_distance=12, whitelist=[], target_all=False)
 turret.run('localhost')
