@@ -34,33 +34,40 @@ class AutoTurret(Client):
     def __init__(self, username: str, range_distance: float, whitelist: Optional[List[str]] = None,
                  target_all: bool = False) -> None:
         super().__init__(username)
+        # Targeting config
         self.range_distance = range_distance
-        self.whitelist = whitelist or []
+        self.whitelist = whitelist
         self.target_all = target_all
-
+        # Target tracking
         self.target: Optional[Living] = None
         self.target_velocities: List[Vector3D] = []
         self.last_target_pos: Optional[Vector3D] = None
-
+        # Shooting state
         self.last_shot_time = 0.0
         self.shot_cooldown = 0.7
         self.is_shooting = False
-
+        # Aiming mechanics
         self.aim_smoothing = 0.4
         self.last_rotation: Optional[Rotation] = None
-
+        # Physics settings
         self.gravity = 0.05
         self.base_arrow_speed = 3.0
         self.eye_height = 1.62
 
     def _is_valid_target(self, entity: Entity) -> bool:
-        """Determine if an entity is a valid target."""
+        """Check if entity is a valid target."""
         if not isinstance(entity, Living) or entity.id == self.user.id:
             return False
 
+        # Player targeting logic
         if isinstance(entity, Player):
-            return not self.whitelist or (entity.info and entity.info.name.lower() not in [w.lower() for w in self.whitelist])
+            if self.whitelist is None:
+                return False
+            if len(self.whitelist) == 0:
+                return True
+            return not entity.info or entity.info.name.lower() not in self.whitelist
 
+        # Non-player targeting
         return self.target_all or isinstance(entity, Monster)
 
     def _get_target_velocity(self) -> Vector3D:
