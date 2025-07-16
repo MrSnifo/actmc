@@ -210,5 +210,5 @@ class AutoTurret(Client):
 
 
 # Example usage:
-turret = AutoTurret('Steve', range_distance=25, whitelist=[], target_all=False)
+turret = AutoTurret('Steve', range_distance=14, whitelist=[], target_all=False)
 turret.run('localhost')
