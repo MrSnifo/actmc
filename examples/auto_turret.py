@@ -119,7 +119,7 @@ class AutoTurret(Client):
         rotation = calculate_rotation(self.user.position, predicted_pos)
         await self.user.translate(rotation=rotation)
 
-    @tasks.loop(seconds=0.3)
+    @tasks.loop(seconds=0.15)
     async def shoot(self) -> None:
         """Shooting loop with dynamic release timing."""
         if not self.target or len(self.target_velocities) < 2:
@@ -129,8 +129,8 @@ class AutoTurret(Client):
 
         # Dynamic release time based on distance
         normalized_distance = distance / self.range_distance
-        release_time = 0.1 + (0.9 * normalized_distance)
-        release_time = max(0.1, min(1.0, release_time))
+        release_time = 0.15 + (0.9 * normalized_distance)
+        release_time = max(0.15, min(1.0, release_time))
 
         await self.user.use_item()
         await asyncio.sleep(release_time)
