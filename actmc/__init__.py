@@ -8,7 +8,7 @@ Real-time Minecraft Event Handling and Protocol Integration in Python
 """
 
 __title__ = 'actmc'
-__version__ = '1.12.2.post2'
+__version__ = '1.12.2.post3'
 __license__ = 'MIT License'
 __author__ = 'Snifo'
 __email__ = 'Snifo@mail.com'
