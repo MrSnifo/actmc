@@ -7,11 +7,12 @@
 An async Python client for Minecraft Java Edition 1.12.2 servers that run in offline mode.
 
 **Key Features**
+
 * Modern async/await API.
 * Comprehensive protocol support.
 * Optimised in both speed and memory.
 
-**Installing**
+## Installing
 
 **Python 3.12 or higher is required**
 
@@ -33,7 +34,7 @@ $ cd actmc
 $ python3 -m pip install -U .
 ```
 
-**Quick Example**
+## Quick Example
 
 ```python
 from actmc import Client
