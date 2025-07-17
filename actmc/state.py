@@ -294,15 +294,25 @@ class ConnectionState:
         self.world_type = level_type
         self._dispatch('respawn', dimension, difficulty, gamemode, level_type)
 
-    # Chat and Messages
     async def parse_0x0f(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Chat Message packet (0x0F)"""
-        chat = protocol.read_chat(buffer)
+        message = Message(protocol.read_chat(buffer))
         position = protocol.read_ubyte(buffer)
-        message = Message(chat)
-        message_type = {0: 'chat_message', 1: 'system_message', 2: 'action_bar'}.get(position)
+
+        message_type_map = {
+            0: 'chat_message',
+            1: 'system_message',
+            2: 'action_bar'
+        }
+
+        message_type = message_type_map.get(position)
+
         if message_type:
+            # Dispatch both the specific and the unified message event
             self._dispatch(message_type, message)
+
+            if message_type in ('chat_message', 'system_message'):
+                self._dispatch('message', message)
 
     async def parse_0x4a(self, buffer: protocol.ProtocolBuffer) -> None:
         """Handle Player List Header/Footer packet (0x4A)"""
