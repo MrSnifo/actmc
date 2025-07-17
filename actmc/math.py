@@ -145,7 +145,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        other : Vector3D[T]
+        other: Vector3D[T]
             The other vector
 
         Returns
@@ -161,7 +161,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        other : Vector3D[T]
+        other: Vector3D[T]
             The other vector
 
         Returns
@@ -181,7 +181,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        tolerance : float, optional
+        tolerance: float
             Tolerance for zero check (default: 1e-6)
 
         Returns
@@ -197,9 +197,9 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        other : Vector3D[T]
+        other: Vector3D[T]
             Target vector
-        t : float
+        t: float
             Interpolation factor (0.0 = this vector, 1.0 = other vector)
 
         Returns
@@ -215,7 +215,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        max_magnitude : float
+        max_magnitude: float
             Maximum allowed magnitude
 
         Returns
@@ -234,7 +234,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        other : Vector3D[T]
+        other: Vector3D[T]
             Target vector
 
         Returns
@@ -254,7 +254,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        other : Vector3D[T]
+        other: Vector3D[T]
             Vector to project onto
 
         Returns
@@ -273,7 +273,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        normal : Vector3D[T]
+        normal: Vector3D[T]
             Surface normal vector (should be normalized)
 
         Returns
@@ -290,7 +290,7 @@ class Vector3D[T]:
 
         Parameters
         ----------
-        vectors : List[Vector3D[T]]
+        vectors: List[Vector3D[T]]
             List of vectors to average
 
         Returns
@@ -557,7 +557,7 @@ class Vector2D[T]:
 
         Parameters
         ----------
-        other : Vector2D[T]
+        other: Vector2D[T]
             The other vector
 
         Returns
@@ -573,7 +573,7 @@ class Vector2D[T]:
 
         Parameters
         ----------
-        tolerance : float, optional
+        tolerance: float
             Tolerance for zero check (default: 1e-6)
 
         Returns
@@ -589,9 +589,9 @@ class Vector2D[T]:
 
         Parameters
         ----------
-        other : Vector2D[T]
+        other: Vector2D[T]
             Target vector
-        t : float
+        t: float
             Interpolation factor (0.0 = this vector, 1.0 = other vector)
 
         Returns
@@ -607,7 +607,7 @@ class Vector2D[T]:
 
         Parameters
         ----------
-        max_magnitude : float
+        max_magnitude: float
             Maximum allowed magnitude
 
         Returns
@@ -627,7 +627,7 @@ class Vector2D[T]:
 
         Parameters
         ----------
-        vectors : List[Vector2D[T]]
+        vectors: List[Vector2D[T]]
             List of vectors to average
 
         Returns
