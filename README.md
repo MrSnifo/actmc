@@ -37,7 +37,7 @@ $ python3 -m pip install -U .
 
 ```python
 from actmc import Client
-from actmc.ui import chat
+from actmc.ui import Message
 
 client = Client(username='Steve')
 
@@ -46,8 +46,10 @@ async def on_ready():
     print('Connected as', client.user.username)
 
 @client.event
-async def on_system_message(message: chat.Message):
-    print("Server:", message)
+async def on_message(message: Message) -> None:
+    text = message.to_plain_text().lower()
+    if 'pog' in text:
+        await client.send_message('Poggers!')
 
 client.run('localhost', 25565)
 ```
