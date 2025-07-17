@@ -48,7 +48,7 @@ async def on_ready():
 
 @client.event
 async def on_message(message: Message) -> None:
-    # Removes chat colors.
+    # Strip chat colors.
     text = message.to_plain_text()
     if 'pog' in text.lower():
         await client.send_message('Poggers!')
